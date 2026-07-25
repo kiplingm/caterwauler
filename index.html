@@ -235,6 +235,29 @@
   .theme-swatch span{display:block;}
   .theme-name{font-family:'Inter',sans-serif; font-size:12.5px; font-weight:600; color:var(--cream);}
   .theme-tag{display:block; font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:var(--cream-dim); margin-top:1px;}
+
+  .check-missing-btn{
+    width:100%; padding:11px 0; border-radius:10px; border:1px solid var(--line);
+    background:var(--bg); color:var(--cream); font-family:'Inter',sans-serif; font-size:13.5px; font-weight:600;
+  }
+  #missingResults{margin-top:12px;}
+  .missing-summary{
+    font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--cream-dim); margin-bottom:8px;
+  }
+  .missing-item{
+    padding:9px 11px; border:1px solid var(--line); border-radius:9px; margin-bottom:6px;
+    background:var(--bg-raised);
+  }
+  .missing-item .mi-title{font-size:13px; font-weight:600; color:var(--cream);}
+  .missing-item .mi-artist{font-size:11.5px; color:var(--cream-dim); margin-top:1px;}
+  .missing-none{
+    font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--green);
+    padding:10px 0;
+  }
+  .missing-hint{
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--cream-dim);
+    margin-top:8px; line-height:1.5;
+  }
 </style>
 </head>
 <body>
@@ -353,6 +376,11 @@
   <div class="field">
     <label>COLOR SCHEME</label>
     <div class="theme-grid" id="themeGrid"></div>
+  </div>
+  <div class="field">
+    <label>DATA HEALTH</label>
+    <button class="check-missing-btn" id="checkMissingBtn">Check for missing range data</button>
+    <div id="missingResults"></div>
   </div>
   <div class="sheet-actions">
     <button class="btn-cancel" id="btnSettingsClose" style="flex:1;">Done</button>
@@ -884,6 +912,7 @@ const settingsBackdrop = document.getElementById("settingsBackdrop");
 
 document.getElementById("settingsBtn").onclick = () => {
   renderThemeGrid();
+  document.getElementById("missingResults").innerHTML = "";
   settingsBackdrop.classList.add("open");
   settingsSheet.classList.add("open");
 };
@@ -893,6 +922,42 @@ function closeSettings(){
 }
 document.getElementById("btnSettingsClose").onclick = closeSettings;
 settingsBackdrop.onclick = closeSettings;
+
+document.getElementById("checkMissingBtn").onclick = async () => {
+  const btn = document.getElementById("checkMissingBtn");
+  const resultsEl = document.getElementById("missingResults");
+  btn.textContent = "Checking…";
+  btn.disabled = true;
+
+  try{
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/songs?select=id,title,artist&or=(low_note.is.null,high_note.is.null)&order=artist.asc`,
+      {headers: HEADERS}
+    );
+    if(!res.ok) throw new Error("Lookup failed");
+    const missing = await res.json();
+
+    if(missing.length === 0){
+      resultsEl.innerHTML = `<div class="missing-none">✓ Every song has range data</div>`;
+    }else{
+      resultsEl.innerHTML = `
+        <div class="missing-summary">${missing.length} song${missing.length===1?"":"s"} missing range data:</div>
+        ${missing.map(s => `
+          <div class="missing-item">
+            <div class="mi-title">${escapeHtml(s.title)}</div>
+            <div class="mi-artist">${escapeHtml(s.artist)}</div>
+          </div>
+        `).join("")}
+        <div class="missing-hint">Ask Claude to "check missing ranges" in chat and it'll research and fill these in.</div>
+      `;
+    }
+  }catch(err){
+    resultsEl.innerHTML = `<div class="missing-summary">Error checking: ${err.message}</div>`;
+  }finally{
+    btn.textContent = "Check for missing range data";
+    btn.disabled = false;
+  }
+};
 
 loadTheme();
 fetchSongs();
