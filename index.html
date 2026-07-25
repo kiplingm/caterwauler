@@ -189,6 +189,23 @@
   }
   .field-row{display:flex; gap:10px;}
   .field-row .field{flex:1;}
+
+  .autocomplete-field{position:relative;}
+  .autocomplete-list{
+    position:absolute; left:0; right:0; top:100%; margin-top:4px;
+    background:var(--bg-raised); border:1px solid var(--line); border-radius:10px;
+    max-height:220px; overflow-y:auto; z-index:60; display:none;
+  }
+  .autocomplete-list.open{display:block;}
+  .autocomplete-item{
+    padding:10px 12px; border-bottom:1px solid var(--line); cursor:pointer;
+  }
+  .autocomplete-item:last-child{border-bottom:none;}
+  .autocomplete-item .ac-title{font-size:13.5px; color:var(--cream); font-weight:600;}
+  .autocomplete-item .ac-artist{font-size:11.5px; color:var(--cream-dim); margin-top:1px;}
+  .autocomplete-empty{
+    padding:10px 12px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cream-dim);
+  }
   .sheet-actions{display:flex; gap:10px; margin-top:16px;}
   .sheet-actions button{flex:1; padding:12px 0; border-radius:10px; font-weight:700; font-size:14px; border:none;}
   .btn-save{background:var(--gold); color:#1c1420;}
@@ -251,13 +268,15 @@
 <div class="sheet" id="sheet">
   <h2 id="sheetTitle">Add song</h2>
   <input type="hidden" id="editId">
-  <div class="field">
+  <div class="field autocomplete-field">
     <label>TITLE</label>
-    <input type="text" id="fTitle" placeholder="Song title">
+    <input type="text" id="fTitle" placeholder="Song title" autocomplete="off">
+    <div class="autocomplete-list" id="titleSuggestions"></div>
   </div>
-  <div class="field">
+  <div class="field autocomplete-field">
     <label>ARTIST</label>
-    <input type="text" id="fArtist" placeholder="Artist">
+    <input type="text" id="fArtist" placeholder="Artist" autocomplete="off">
+    <div class="autocomplete-list" id="artistSuggestions"></div>
   </div>
   <div class="field-row">
     <div class="field">
@@ -640,6 +659,8 @@ document.getElementById("fabAdd").onclick = ()=>{
   document.getElementById("editId").value = "";
   ["fTitle","fArtist","fLow","fHigh","fGenre","fKeyNotes"].forEach(id=>document.getElementById(id).value="");
   document.getElementById("fStatus").value = "Maybe";
+  document.getElementById("titleSuggestions").classList.remove("open");
+  document.getElementById("artistSuggestions").classList.remove("open");
   openSheet();
 };
 document.getElementById("btnCancel").onclick = closeSheet;
@@ -759,7 +780,68 @@ document.getElementById("btnLogSave").onclick = async ()=>{
   }
 };
 
-// --- Color scheme settings ---
+// --- Catalog autocomplete (searches your 84k-song karafun_catalog table) ---
+let acDebounce = null;
+
+async function searchCatalog(query){
+  if(!query || query.trim().length < 2) return [];
+  const term = `*${query.trim()}*`;
+  const url = `${SUPABASE_URL}/rest/v1/karafun_catalog?select=title,artist&or=(title.ilike.${encodeURIComponent(term)},artist.ilike.${encodeURIComponent(term)})&limit=8&order=title.asc`;
+  try{
+    const res = await fetch(url, {headers: HEADERS});
+    if(!res.ok) return [];
+    return await res.json();
+  }catch(e){
+    return [];
+  }
+}
+
+function renderSuggestions(listEl, results, onPick){
+  if(results.length === 0){
+    listEl.innerHTML = `<div class="autocomplete-empty">No catalog matches</div>`;
+  }else{
+    listEl.innerHTML = results.map((r, i) => `
+      <div class="autocomplete-item" data-idx="${i}">
+        <div class="ac-title">${escapeHtml(r.title)}</div>
+        <div class="ac-artist">${escapeHtml(r.artist)}</div>
+      </div>
+    `).join("");
+    listEl.querySelectorAll(".autocomplete-item").forEach(el=>{
+      el.onclick = () => onPick(results[el.dataset.idx]);
+    });
+  }
+  listEl.classList.add("open");
+}
+
+function wireAutocomplete(inputId, listId){
+  const input = document.getElementById(inputId);
+  const list = document.getElementById(listId);
+
+  input.addEventListener("input", () => {
+    clearTimeout(acDebounce);
+    const q = input.value;
+    if(q.trim().length < 2){ list.classList.remove("open"); return; }
+    acDebounce = setTimeout(async () => {
+      const results = await searchCatalog(q);
+      renderSuggestions(list, results, (picked) => {
+        document.getElementById("fTitle").value = picked.title;
+        document.getElementById("fArtist").value = picked.artist;
+        list.classList.remove("open");
+      });
+    }, 250);
+  });
+
+  input.addEventListener("blur", () => {
+    // Delay so a click on a suggestion registers before the list closes
+    setTimeout(() => list.classList.remove("open"), 150);
+  });
+  input.addEventListener("focus", () => {
+    if(list.innerHTML.trim()) list.classList.add("open");
+  });
+}
+
+wireAutocomplete("fTitle", "titleSuggestions");
+wireAutocomplete("fArtist", "artistSuggestions");
 const THEMES = [
   {id:"jukebox", name:"Neon Jukebox", tag:"Default", colors:["#e8b74e","#3ddad7","#1c1420","#f2e9dc"]},
   {id:"rust", name:"Rust & Rye", tag:"Warm/Americana", colors:["#c9722f","#7fa66b","#1a1512","#f0e6d6"]},
