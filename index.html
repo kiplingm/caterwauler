@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Songbook</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
+
+  :root{
+    --bg: #1c1420;
+    --bg-raised: #241a2b;
+    --line: #3a2c42;
+    --gold: #e8b74e;
+    --teal: #3ddad7;
+    --cream: #f2e9dc;
+    --cream-dim: #b6a99a;
+    --red: #e8615a;
+    --green: #6fbf73;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--cream);font-family:'Inter',sans-serif;-webkit-tap-highlight-color:transparent;}
+  body{padding-bottom:88px;}
+
+  .marquee{
+    padding:22px 18px 14px;
+    border-bottom:1px solid var(--line);
+    position:sticky; top:0; background:var(--bg); z-index:20;
+  }
+  .marquee h1{
+    font-family:'Bebas Neue',sans-serif;
+    font-size:34px;
+    letter-spacing:1.5px;
+    margin:0;
+    color:var(--gold);
+    text-shadow:0 0 18px rgba(232,183,78,0.35);
+  }
+  .marquee .sub{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--cream-dim);
+    margin-top:4px;
+    letter-spacing:0.5px;
+  }
+
+  .controls{padding:14px 18px 4px; display:flex; flex-direction:column; gap:10px;}
+  .search-row{display:flex; gap:8px;}
+  input[type=text]{
+    flex:1; background:var(--bg-raised); border:1px solid var(--line); border-radius:10px;
+    padding:11px 12px; color:var(--cream); font-size:15px; font-family:'Inter',sans-serif;
+  }
+  input[type=text]:focus{outline:none; border-color:var(--teal);}
+  .filter-chips{display:flex; gap:6px; overflow-x:auto; padding-bottom:2px;}
+  .chip{
+    flex:none; font-family:'IBM Plex Mono',monospace; font-size:11.5px; letter-spacing:0.3px;
+    padding:6px 12px; border-radius:999px; border:1px solid var(--line); color:var(--cream-dim);
+    background:transparent; white-space:nowrap;
+  }
+  .chip.active{border-color:var(--gold); color:var(--gold); background:rgba(232,183,78,0.08);}
+
+  .count-row{padding:10px 18px 2px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cream-dim);}
+
+  .list{padding:8px 14px 20px; display:flex; flex-direction:column; gap:10px;}
+  .card{
+    background:var(--bg-raised); border:1px solid var(--line); border-radius:14px; padding:14px 14px 12px;
+  }
+  .card-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
+  .title{font-weight:700; font-size:16px; line-height:1.25;}
+  .artist{font-size:13px; color:var(--cream-dim); margin-top:2px;}
+  .status-pill{
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:0.4px;
+    padding:4px 9px; border-radius:999px; flex:none; text-transform:uppercase;
+  }
+  .status-Solid{background:rgba(111,191,115,0.15); color:var(--green);}
+  .status-Learning{background:rgba(61,218,215,0.15); color:var(--teal);}
+  .status-Maybe{background:rgba(232,183,78,0.15); color:var(--gold);}
+  .status-Retired{background:rgba(232,97,90,0.15); color:var(--red);}
+
+  .range-strip{margin-top:12px;}
+  .range-track{
+    position:relative; height:10px; border-radius:6px; background:var(--bg);
+    border:1px solid var(--line);
+  }
+  .range-comfort{position:absolute; top:0; bottom:0; background:rgba(61,218,215,0.18); border-left:1px solid var(--teal); border-right:1px solid var(--teal);}
+  .range-song{position:absolute; top:-3px; height:16px; border-radius:5px; background:linear-gradient(90deg, var(--gold), #f2d38a); box-shadow:0 0 8px rgba(232,183,78,0.5);}
+  .range-labels{display:flex; justify-content:space-between; font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:var(--cream-dim); margin-top:5px;}
+  .range-fit{font-family:'IBM Plex Mono',monospace; font-size:10px; margin-top:4px;}
+  .fit-easy{color:var(--green);} .fit-stretch{color:var(--gold);} .fit-out{color:var(--red);} .fit-unknown{color:var(--cream-dim);}
+
+  .card-meta{display:flex; gap:14px; margin-top:10px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cream-dim);}
+  .card-actions{display:flex; gap:8px; margin-top:12px;}
+  .card-actions button{
+    flex:1; font-family:'Inter',sans-serif; font-size:12.5px; font-weight:600;
+    padding:8px 0; border-radius:8px; border:1px solid var(--line); background:transparent; color:var(--cream-dim);
+  }
+  .card-actions button.primary{border-color:var(--teal); color:var(--teal);}
+  .card-actions button.danger{border-color:var(--red); color:var(--red);}
+
+  .fab{
+    position:fixed; right:20px; bottom:24px; width:56px; height:56px; border-radius:50%;
+    background:var(--gold); color:#1c1420; font-size:28px; border:none; box-shadow:0 6px 20px rgba(232,183,78,0.4);
+    display:flex; align-items:center; justify-content:center; z-index:30;
+  }
+
+  .sheet-backdrop{
+    position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:40; display:none;
+  }
+  .sheet-backdrop.open{display:block;}
+  .sheet{
+    position:fixed; left:0; right:0; bottom:0; background:var(--bg-raised); border-top:1px solid var(--line);
+    border-radius:18px 18px 0 0; padding:18px 18px 22px; z-index:41;
+    transform:translateY(100%); transition:transform 0.25s ease; max-height:85vh; overflow-y:auto;
+  }
+  .sheet.open{transform:translateY(0);}
+  .sheet h2{font-family:'Bebas Neue',sans-serif; font-size:22px; color:var(--gold); margin:0 0 14px; letter-spacing:1px;}
+  .field{margin-bottom:12px;}
+  .field label{display:block; font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--cream-dim); margin-bottom:5px; letter-spacing:0.4px;}
+  .field input, .field select{
+    width:100%; background:var(--bg); border:1px solid var(--line); border-radius:9px; padding:10px 11px;
+    color:var(--cream); font-size:14.5px; font-family:'Inter',sans-serif;
+  }
+  .field-row{display:flex; gap:10px;}
+  .field-row .field{flex:1;}
+  .sheet-actions{display:flex; gap:10px; margin-top:16px;}
+  .sheet-actions button{flex:1; padding:12px 0; border-radius:10px; font-weight:700; font-size:14px; border:none;}
+  .btn-save{background:var(--gold); color:#1c1420;}
+  .btn-cancel{background:transparent; border:1px solid var(--line) !important; color:var(--cream-dim);}
+
+  .toast{
+    position:fixed; bottom:96px; left:50%; transform:translateX(-50%);
+    background:var(--bg-raised); border:1px solid var(--teal); color:var(--teal);
+    padding:9px 16px; border-radius:999px; font-family:'IBM Plex Mono',monospace; font-size:12px;
+    z-index:50; opacity:0; transition:opacity 0.2s;
+  }
+  .toast.show{opacity:1;}
+
+  .empty{padding:40px 20px; text-align:center; color:var(--cream-dim); font-family:'IBM Plex Mono',monospace; font-size:12.5px;}
+  .loading{padding:40px 20px; text-align:center; color:var(--cream-dim); font-family:'IBM Plex Mono',monospace; font-size:12px;}
+</style>
+</head>
+<body>
+
+<div class="marquee">
+  <h1>SONGBOOK</h1>
+  <div class="sub" id="rangeLine">YOUR RANGE — LOADING…</div>
+</div>
+
+<div class="controls">
+  <div class="search-row">
+    <input type="text" id="search" placeholder="Search title or artist…">
+  </div>
+  <div class="filter-chips" id="chips"></div>
+</div>
+
+<div class="count-row" id="countRow"></div>
+<div class="list" id="list"><div class="loading">Loading songbook…</div></div>
+
+<button class="fab" id="fabAdd">+</button>
+
+<div class="sheet-backdrop" id="backdrop"></div>
+<div class="sheet" id="sheet">
+  <h2 id="sheetTitle">Add song</h2>
+  <input type="hidden" id="editId">
+  <div class="field">
+    <label>TITLE</label>
+    <input type="text" id="fTitle" placeholder="Song title">
+  </div>
+  <div class="field">
+    <label>ARTIST</label>
+    <input type="text" id="fArtist" placeholder="Artist">
+  </div>
+  <div class="field-row">
+    <div class="field">
+      <label>LOW NOTE</label>
+      <input type="text" id="fLow" placeholder="e.g. C3">
+    </div>
+    <div class="field">
+      <label>HIGH NOTE</label>
+      <input type="text" id="fHigh" placeholder="e.g. F4">
+    </div>
+  </div>
+  <div class="field-row">
+    <div class="field">
+      <label>STATUS</label>
+      <select id="fStatus">
+        <option>Solid</option>
+        <option>Learning</option>
+        <option selected>Maybe</option>
+        <option>Retired</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>GENRE</label>
+      <input type="text" id="fGenre" placeholder="e.g. Heartland rock">
+    </div>
+  </div>
+  <div class="field">
+    <label>KEY NOTES</label>
+    <input type="text" id="fKeyNotes" placeholder="Capo, key changes, phrasing notes…">
+  </div>
+  <div class="sheet-actions">
+    <button class="btn-cancel" id="btnCancel">Cancel</button>
+    <button class="btn-save" id="btnSave">Save</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = "https://luykkuptcizkdigwness.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1eWtrdXB0Y2l6a2RpZ3duZXNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MTcyOTgsImV4cCI6MjEwMDM5MzI5OH0.IWrRp9mzUYOXJmd17-7_M6pnz3rw3LX5xMpnkXlolRw";
+const HEADERS = {
+  "apikey": SUPABASE_KEY,
+  "Authorization": "Bearer " + SUPABASE_KEY,
+  "Content-Type": "application/json"
+};
+
+// Kipling's vocal range
+const COMFORT_LOW = "A2", COMFORT_HIGH = "B4";
+const STRETCH_LOW = "G2", STRETCH_HIGH = "D5";
+
+const NOTE_VALUES = {C:0,"C#":1,DB:1,D:2,"D#":3,EB:3,E:4,F:5,"F#":6,GB:6,G:7,"G#":8,AB:8,A:9,"A#":10,BB:10,B:11};
+
+function noteToSemitone(note){
+  if(!note) return null;
+  const m = note.trim().toUpperCase().match(/^([A-G])(#|B)?(-?\d)$/);
+  if(!m) return null;
+  let [, letter, acc, octave] = m;
+  let key = letter + (acc || "");
+  if(!(key in NOTE_VALUES)) return null;
+  return NOTE_VALUES[key] + (parseInt(octave)+1)*12;
+}
+
+const comfortLowS = noteToSemitone(COMFORT_LOW);
+const comfortHighS = noteToSemitone(COMFORT_HIGH);
+const stretchLowS = noteToSemitone(STRETCH_LOW);
+const stretchHighS = noteToSemitone(STRETCH_HIGH);
+
+document.getElementById("rangeLine").textContent =
+  `YOUR RANGE — COMFORT ${COMFORT_LOW}–${COMFORT_HIGH} · STRETCH ${STRETCH_LOW}–${STRETCH_HIGH}`;
+
+let songs = [];
+let activeFilter = "All";
+let searchTerm = "";
+
+const listEl = document.getElementById("list");
+const countRow = document.getElementById("countRow");
+const chipsEl = document.getElementById("chips");
+const FILTERS = ["All","Solid","Learning","Maybe","Retired"];
+
+FILTERS.forEach(f=>{
+  const c = document.createElement("button");
+  c.className = "chip" + (f==="All" ? " active" : "");
+  c.textContent = f;
+  c.onclick = () => { activeFilter = f; document.querySelectorAll(".chip").forEach(x=>x.classList.remove("active")); c.classList.add("active"); render(); };
+  chipsEl.appendChild(c);
+});
+
+document.getElementById("search").addEventListener("input", e=>{
+  searchTerm = e.target.value.toLowerCase();
+  render();
+});
+
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"), 1800);
+}
+
+async function fetchSongs(){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/songs?select=*&order=title.asc`, {headers: HEADERS});
+    if(!res.ok) throw new Error("Fetch failed: " + res.status);
+    songs = await res.json();
+    render();
+  }catch(err){
+    listEl.innerHTML = `<div class="empty">Couldn't load songbook.<br>${err.message}</div>`;
+  }
+}
+
+function fitLabel(lowS, highS){
+  if(lowS===null || highS===null) return {cls:"fit-unknown", text:"RANGE NOT SET"};
+  if(lowS >= comfortLowS && highS <= comfortHighS) return {cls:"fit-easy", text:"EASY FIT"};
+  if(lowS >= stretchLowS && highS <= stretchHighS) return {cls:"fit-stretch", text:"STRETCH"};
+  return {cls:"fit-out", text:"OUT OF RANGE"};
+}
+
+function renderRangeStrip(low, high){
+  const lowS = noteToSemitone(low), highS = noteToSemitone(high);
+  const spanLow = stretchLowS - 2, spanHigh = stretchHighS + 2;
+  const span = spanHigh - spanLow;
+  const pct = v => Math.max(0, Math.min(100, ((v - spanLow)/span)*100));
+
+  const comfortLeft = pct(comfortLowS), comfortRight = pct(comfortHighS);
+  let songBar = "";
+  if(lowS!==null && highS!==null){
+    const l = pct(lowS), r = pct(highS);
+    const width = Math.max(r-l, 2.5);
+    songBar = `<div class="range-song" style="left:${l}%; width:${width}%;"></div>`;
+  }
+  const fit = fitLabel(lowS, highS);
+  return `
+    <div class="range-strip">
+      <div class="range-track">
+        <div class="range-comfort" style="left:${comfortLeft}%; width:${comfortRight-comfortLeft}%;"></div>
+        ${songBar}
+      </div>
+      <div class="range-labels"><span>${STRETCH_LOW}</span><span>${STRETCH_HIGH}</span></div>
+      <div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}</div>
+    </div>`;
+}
+
+function render(){
+  let filtered = songs.filter(s=>{
+    const matchesFilter = activeFilter==="All" || s.status===activeFilter;
+    const matchesSearch = !searchTerm || (s.title||"").toLowerCase().includes(searchTerm) || (s.artist||"").toLowerCase().includes(searchTerm);
+    return matchesFilter && matchesSearch;
+  });
+
+  countRow.textContent = `${filtered.length} of ${songs.length} songs`;
+
+  if(filtered.length===0){
+    listEl.innerHTML = `<div class="empty">No songs match. Try a different search or filter — or add one with the + button.</div>`;
+    return;
+  }
+
+  listEl.innerHTML = filtered.map(s => `
+    <div class="card" data-id="${s.id}">
+      <div class="card-top">
+        <div>
+          <div class="title">${escapeHtml(s.title)}</div>
+          <div class="artist">${escapeHtml(s.artist)}</div>
+        </div>
+        <div class="status-pill status-${s.status}">${s.status}</div>
+      </div>
+      ${renderRangeStrip(s.low_note, s.high_note)}
+      <div class="card-meta">
+        ${s.genre ? `<span>${escapeHtml(s.genre)}</span>` : ""}
+        ${s.key_notes ? `<span>${escapeHtml(s.key_notes)}</span>` : ""}
+      </div>
+      <div class="card-actions">
+        <button class="editBtn" data-id="${s.id}">Edit</button>
+        <button class="delBtn danger" data-id="${s.id}">Delete</button>
+      </div>
+    </div>
+  `).join("");
+
+  document.querySelectorAll(".editBtn").forEach(b=>b.onclick = ()=>openEdit(b.dataset.id));
+  document.querySelectorAll(".delBtn").forEach(b=>b.onclick = ()=>deleteSong(b.dataset.id));
+}
+
+function escapeHtml(str){
+  if(!str) return "";
+  const d = document.createElement("div");
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// --- Sheet (add/edit) ---
+const sheet = document.getElementById("sheet");
+const backdrop = document.getElementById("backdrop");
+
+function openSheet(){ backdrop.classList.add("open"); sheet.classList.add("open"); }
+function closeSheet(){ backdrop.classList.remove("open"); sheet.classList.remove("open"); }
+
+document.getElementById("fabAdd").onclick = ()=>{
+  document.getElementById("sheetTitle").textContent = "Add song";
+  document.getElementById("editId").value = "";
+  ["fTitle","fArtist","fLow","fHigh","fGenre","fKeyNotes"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("fStatus").value = "Maybe";
+  openSheet();
+};
+document.getElementById("btnCancel").onclick = closeSheet;
+backdrop.onclick = closeSheet;
+
+function openEdit(id){
+  const s = songs.find(x=>x.id===id);
+  if(!s) return;
+  document.getElementById("sheetTitle").textContent = "Edit song";
+  document.getElementById("editId").value = s.id;
+  document.getElementById("fTitle").value = s.title || "";
+  document.getElementById("fArtist").value = s.artist || "";
+  document.getElementById("fLow").value = s.low_note || "";
+  document.getElementById("fHigh").value = s.high_note || "";
+  document.getElementById("fStatus").value = s.status || "Maybe";
+  document.getElementById("fGenre").value = s.genre || "";
+  document.getElementById("fKeyNotes").value = s.key_notes || "";
+  openSheet();
+}
+
+document.getElementById("btnSave").onclick = async ()=>{
+  const id = document.getElementById("editId").value;
+  const title = document.getElementById("fTitle").value.trim();
+  const artist = document.getElementById("fArtist").value.trim();
+  if(!title || !artist){ showToast("Title and artist required"); return; }
+
+  const payload = {
+    title,
+    artist,
+    low_note: document.getElementById("fLow").value.trim() || null,
+    high_note: document.getElementById("fHigh").value.trim() || null,
+    status: document.getElementById("fStatus").value,
+    genre: document.getElementById("fGenre").value.trim() || null,
+    key_notes: document.getElementById("fKeyNotes").value.trim() || null,
+    updated_at: new Date().toISOString()
+  };
+
+  try{
+    if(id){
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/songs?id=eq.${id}`, {
+        method:"PATCH", headers:{...HEADERS, "Prefer":"return=representation"}, body: JSON.stringify(payload)
+      });
+      if(!res.ok) throw new Error("Update failed");
+      showToast("Song updated");
+    }else{
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/songs`, {
+        method:"POST", headers:{...HEADERS, "Prefer":"return=representation"}, body: JSON.stringify(payload)
+      });
+      if(!res.ok) throw new Error("Insert failed");
+      showToast("Song added");
+    }
+    closeSheet();
+    fetchSongs();
+  }catch(err){
+    showToast("Error: " + err.message);
+  }
+};
+
+async function deleteSong(id){
+  if(!confirm("Delete this song?")) return;
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/songs?id=eq.${id}`, {method:"DELETE", headers: HEADERS});
+    if(!res.ok) throw new Error("Delete failed");
+    showToast("Song removed");
+    fetchSongs();
+  }catch(err){
+    showToast("Error: " + err.message);
+  }
+}
+
+fetchSongs();
+</script>
+</body>
+</html>
