@@ -81,6 +81,7 @@
   .status-Learning{background:rgba(61,218,215,0.15); color:var(--teal);}
   .status-Maybe{background:rgba(232,183,78,0.15); color:var(--gold);}
   .status-Retired{background:rgba(232,97,90,0.15); color:var(--red);}
+  .status-Suggested{background:rgba(182,169,154,0.18); color:var(--cream-dim);}
 
   .range-strip{margin-top:12px;}
   .range-track{
@@ -197,6 +198,7 @@
         <option>Solid</option>
         <option>Learning</option>
         <option selected>Maybe</option>
+        <option>Suggested</option>
         <option>Retired</option>
       </select>
     </div>
@@ -296,7 +298,7 @@ document.getElementById("sortSelect").addEventListener("change", e=>{
 const listEl = document.getElementById("list");
 const countRow = document.getElementById("countRow");
 const chipsEl = document.getElementById("chips");
-const FILTERS = ["All","Solid","Learning","Maybe","Retired"];
+const FILTERS = ["All","Solid","Learning","Maybe","Suggested","Retired"];
 
 FILTERS.forEach(f=>{
   const c = document.createElement("button");
