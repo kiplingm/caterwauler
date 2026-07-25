@@ -82,6 +82,15 @@
   .status-Maybe{background:rgba(232,183,78,0.15); color:var(--gold);}
   .status-Retired{background:rgba(232,97,90,0.15); color:var(--red);}
   .status-Suggested{background:rgba(182,169,154,0.18); color:var(--cream-dim);}
+  .status-pill{cursor:pointer;}
+  .status-edit-select{
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:0.4px;
+    padding:4px 6px; border-radius:999px; flex:none; text-transform:uppercase;
+    background:var(--bg); color:var(--cream); border:1px solid var(--teal);
+  }
+  .range-fit.fit-out .transpose-suggestion{
+    display:block; margin-top:3px; color:var(--teal);
+  }
 
   .range-strip{margin-top:12px;}
   .range-track{
@@ -289,6 +298,8 @@ let songs = [];
 let activeFilter = "All";
 let searchTerm = "";
 let sortMode = "fit";
+let editingStatusId = null;
+const STATUS_OPTIONS = ["Solid","Learning","Maybe","Suggested","Retired"];
 
 document.getElementById("sortSelect").addEventListener("change", e=>{
   sortMode = e.target.value;
@@ -361,6 +372,53 @@ function fitScore(low, high){
   return below + above;
 }
 
+const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+function semitoneToNoteName(s){
+  const pc = ((s % 12) + 12) % 12;
+  const octave = Math.floor(s / 12) - 1;
+  return NOTE_NAMES[pc] + octave;
+}
+
+// For an out-of-range song, suggest a semitone shift that best fits it into
+// the comfort zone (or failing that, the stretch zone).
+function suggestTransposition(lowS, highS){
+  if(lowS===null || highS===null) return null;
+  const songSpan = highS - lowS;
+  const comfortSpan = comfortHighS - comfortLowS;
+
+  if(songSpan <= comfortSpan){
+    const minShift = comfortLowS - lowS;
+    const maxShift = comfortHighS - highS;
+    const shift = Math.round((minShift + maxShift) / 2);
+    return {shift, zone: "comfort"};
+  }
+  const stretchSpan = stretchHighS - stretchLowS;
+  if(songSpan <= stretchSpan){
+    const minShift = stretchLowS - lowS;
+    const maxShift = stretchHighS - highS;
+    const shift = Math.round((minShift + maxShift) / 2);
+    return {shift, zone: "stretch"};
+  }
+  return {shift: 0, zone: "none"};
+}
+
+function transpositionMessage(lowS, highS){
+  const suggestion = suggestTransposition(lowS, highS);
+  if(!suggestion) return "";
+  const {shift, zone} = suggestion;
+  if(zone === "none"){
+    return "Spans more than your full range — no single key change fixes this one.";
+  }
+  const dir = shift > 0 ? "up" : shift < 0 ? "down" : null;
+  const zoneLabel = zone === "comfort" ? "an easy fit" : "your stretch range";
+  if(!dir){
+    return `Already centered — this is as good as it gets in ${zoneLabel}.`;
+  }
+  const newLow = semitoneToNoteName(lowS + shift);
+  const newHigh = semitoneToNoteName(highS + shift);
+  return `Try shifting ${dir} ${Math.abs(shift)} semitone${Math.abs(shift)===1?"":"s"} (${newLow}–${newHigh}) for ${zoneLabel}.`;
+}
+
 function renderRangeStrip(low, high){
   const lowS = noteToSemitone(low), highS = noteToSemitone(high);
   const spanLow = stretchLowS - 2, spanHigh = stretchHighS + 2;
@@ -375,6 +433,9 @@ function renderRangeStrip(low, high){
     songBar = `<div class="range-song" style="left:${l}%; width:${width}%;"></div>`;
   }
   const fit = fitLabel(lowS, highS);
+  const suggestionHtml = fit.cls === "fit-out"
+    ? `<span class="transpose-suggestion">${transpositionMessage(lowS, highS)}</span>`
+    : "";
   return `
     <div class="range-strip">
       <div class="range-track">
@@ -382,7 +443,7 @@ function renderRangeStrip(low, high){
         ${songBar}
       </div>
       <div class="range-labels"><span>${STRETCH_LOW}</span><span>${STRETCH_HIGH}</span></div>
-      <div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}</div>
+      <div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${suggestionHtml}</div>
     </div>`;
 }
 
@@ -423,7 +484,13 @@ function render(){
           <div class="title">${escapeHtml(s.title)}</div>
           <div class="artist">${escapeHtml(s.artist)}</div>
         </div>
-        <div class="status-pill status-${s.status}">${s.status}</div>
+        ${editingStatusId === s.id ? `
+          <select class="status-edit-select" data-id="${s.id}">
+            ${STATUS_OPTIONS.map(opt => `<option value="${opt}" ${opt===s.status?"selected":""}>${opt}</option>`).join("")}
+          </select>
+        ` : `
+          <div class="status-pill status-${s.status}" data-id="${s.id}">${s.status}</div>
+        `}
       </div>
       ${renderRangeStrip(s.low_note, s.high_note)}
       <div class="card-meta">
@@ -439,9 +506,33 @@ function render(){
     </div>
   `).join("");
 
+  document.querySelectorAll(".status-pill").forEach(el=>{
+    el.onclick = () => { editingStatusId = el.dataset.id; render(); };
+  });
+  document.querySelectorAll(".status-edit-select").forEach(sel=>{
+    sel.onchange = () => updateStatus(sel.dataset.id, sel.value);
+    sel.onblur = () => { editingStatusId = null; render(); };
+    setTimeout(()=>sel.focus(), 0);
+  });
   document.querySelectorAll(".logBtn").forEach(b=>b.onclick = ()=>openLog(b.dataset.id));
   document.querySelectorAll(".editBtn").forEach(b=>b.onclick = ()=>openEdit(b.dataset.id));
   document.querySelectorAll(".delBtn").forEach(b=>b.onclick = ()=>deleteSong(b.dataset.id));
+}
+
+async function updateStatus(id, newStatus){
+  editingStatusId = null;
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/songs?id=eq.${id}`, {
+      method:"PATCH", headers:{...HEADERS, "Prefer":"return=representation"},
+      body: JSON.stringify({status: newStatus, updated_at: new Date().toISOString()})
+    });
+    if(!res.ok) throw new Error("Status update failed");
+    showToast(`Status set to ${newStatus}`);
+    fetchSongs();
+  }catch(err){
+    showToast("Error: " + err.message);
+    render();
+  }
 }
 
 function formatDate(iso){
