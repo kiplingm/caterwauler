@@ -210,6 +210,10 @@
   .sheet-actions button{flex:1; padding:12px 0; border-radius:10px; font-weight:700; font-size:14px; border:none;}
   .btn-save{background:var(--gold); color:#1c1420;}
   .btn-cancel{background:transparent; border:1px solid var(--line) !important; color:var(--cream-dim);}
+  .btn-delete-song{
+    width:100%; margin-top:10px; padding:11px 0; border-radius:10px; border:1px solid var(--red);
+    background:transparent; color:var(--red); font-family:'Inter',sans-serif; font-size:13.5px; font-weight:600;
+  }
 
   .toast{
     position:fixed; bottom:96px; left:50%; transform:translateX(-50%);
@@ -335,6 +339,7 @@
     <button class="btn-cancel" id="btnCancel">Cancel</button>
     <button class="btn-save" id="btnSave">Save</button>
   </div>
+  <button class="btn-delete-song" id="btnDeleteSong" style="display:none;">Delete song</button>
 </div>
 
 <div class="sheet-backdrop" id="logBackdrop"></div>
@@ -689,10 +694,19 @@ document.getElementById("fabAdd").onclick = ()=>{
   document.getElementById("fStatus").value = "Maybe";
   document.getElementById("titleSuggestions").classList.remove("open");
   document.getElementById("artistSuggestions").classList.remove("open");
+  document.getElementById("btnDeleteSong").style.display = "none";
   openSheet();
 };
 document.getElementById("btnCancel").onclick = closeSheet;
 backdrop.onclick = closeSheet;
+
+document.getElementById("btnDeleteSong").onclick = async () => {
+  const id = document.getElementById("editId").value;
+  if(!id) return;
+  if(!confirm("Delete this song?")) return;
+  closeSheet();
+  await deleteSong(id, {skipConfirm:true});
+};
 
 function openEdit(id){
   const s = songs.find(x=>x.id===id);
@@ -706,6 +720,7 @@ function openEdit(id){
   document.getElementById("fStatus").value = s.status || "Maybe";
   document.getElementById("fGenre").value = s.genre || "";
   document.getElementById("fKeyNotes").value = s.key_notes || "";
+  document.getElementById("btnDeleteSong").style.display = "block";
   openSheet();
 }
 
@@ -747,8 +762,8 @@ document.getElementById("btnSave").onclick = async ()=>{
   }
 };
 
-async function deleteSong(id){
-  if(!confirm("Delete this song?")) return;
+async function deleteSong(id, opts={}){
+  if(!opts.skipConfirm && !confirm("Delete this song?")) return;
   try{
     const res = await fetch(`${SUPABASE_URL}/rest/v1/songs?id=eq.${id}`, {method:"DELETE", headers: HEADERS});
     if(!res.ok) throw new Error("Delete failed");
