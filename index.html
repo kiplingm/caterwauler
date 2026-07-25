@@ -246,7 +246,7 @@
   }
   .missing-item{
     padding:9px 11px; border:1px solid var(--line); border-radius:9px; margin-bottom:6px;
-    background:var(--bg-raised);
+    background:var(--bg-raised); cursor:pointer;
   }
   .missing-item .mi-title{font-size:13px; font-weight:600; color:var(--cream);}
   .missing-item .mi-artist{font-size:11.5px; color:var(--cream-dim); margin-top:1px;}
@@ -943,13 +943,19 @@ document.getElementById("checkMissingBtn").onclick = async () => {
       resultsEl.innerHTML = `
         <div class="missing-summary">${missing.length} song${missing.length===1?"":"s"} missing range data:</div>
         ${missing.map(s => `
-          <div class="missing-item">
+          <div class="missing-item" data-id="${s.id}">
             <div class="mi-title">${escapeHtml(s.title)}</div>
             <div class="mi-artist">${escapeHtml(s.artist)}</div>
           </div>
         `).join("")}
-        <div class="missing-hint">Ask Claude to "check missing ranges" in chat and it'll research and fill these in.</div>
+        <div class="missing-hint">Tap a song to edit it directly, or ask Claude to "check missing ranges" in chat and it'll research and fill these in.</div>
       `;
+      resultsEl.querySelectorAll(".missing-item").forEach(el => {
+        el.onclick = () => {
+          closeSettings();
+          openEdit(el.dataset.id);
+        };
+      });
     }
   }catch(err){
     resultsEl.innerHTML = `<div class="missing-summary">Error checking: ${err.message}</div>`;
