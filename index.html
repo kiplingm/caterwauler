@@ -18,6 +18,50 @@
     --red: #e8615a;
     --green: #6fbf73;
   }
+  body[data-theme="rust"]{
+    --bg: #1a1512;
+    --bg-raised: #241b16;
+    --line: #40302a;
+    --gold: #c9722f;
+    --teal: #7fa66b;
+    --cream: #f0e6d6;
+    --cream-dim: #b3a48c;
+    --red: #cc5c4a;
+    --green: #8fae5f;
+  }
+  body[data-theme="cassette"]{
+    --bg: #141a2e;
+    --bg-raised: #1d2740;
+    --line: #2e3b5c;
+    --gold: #ff5da2;
+    --teal: #4fd3ff;
+    --cream: #eef1fb;
+    --cream-dim: #9aa6c9;
+    --red: #ff5d5d;
+    --green: #52e0a1;
+  }
+  body[data-theme="contrast"]{
+    --bg: #000000;
+    --bg-raised: #0d0d0d;
+    --line: #ffffff;
+    --gold: #ffe600;
+    --teal: #00e5ff;
+    --cream: #ffffff;
+    --cream-dim: #dddddd;
+    --red: #ff453a;
+    --green: #30ff5e;
+  }
+  body[data-theme="contrast"] .card,
+  body[data-theme="contrast"] input,
+  body[data-theme="contrast"] select,
+  body[data-theme="contrast"] .range-track,
+  body[data-theme="contrast"] .chip,
+  body[data-theme="contrast"] .gear-btn{
+    border-width:2px;
+  }
+  body[data-theme="contrast"] .card-actions button{
+    border-width:2px;
+  }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--cream);font-family:'Inter',sans-serif;-webkit-tap-highlight-color:transparent;}
   body{padding-bottom:88px;}
@@ -34,6 +78,14 @@
     margin:0;
     color:var(--gold);
     text-shadow:0 0 18px rgba(232,183,78,0.35);
+  }
+  .marquee-top{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  .gear-btn{
+    flex:none; background:var(--bg-raised); border:1px solid var(--line); border-radius:10px;
+    width:38px; height:38px; font-size:18px; color:var(--cream-dim); line-height:1;
+  }
+  .gear-btn:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible{
+    outline:2px solid var(--teal); outline-offset:2px;
   }
   .marquee .sub{
     font-family:'IBM Plex Mono',monospace;
@@ -152,12 +204,29 @@
 
   .empty{padding:40px 20px; text-align:center; color:var(--cream-dim); font-family:'IBM Plex Mono',monospace; font-size:12.5px;}
   .loading{padding:40px 20px; text-align:center; color:var(--cream-dim); font-family:'IBM Plex Mono',monospace; font-size:12px;}
+
+  .theme-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .theme-option{
+    display:flex; align-items:center; gap:10px; padding:11px 12px; border-radius:10px;
+    border:1px solid var(--line); background:var(--bg); text-align:left;
+  }
+  .theme-option.active{border-color:var(--teal); box-shadow:0 0 0 1px var(--teal) inset;}
+  .theme-swatch{
+    flex:none; width:26px; height:26px; border-radius:8px; border:1px solid rgba(255,255,255,0.15);
+    display:grid; grid-template-columns:1fr 1fr; overflow:hidden;
+  }
+  .theme-swatch span{display:block;}
+  .theme-name{font-family:'Inter',sans-serif; font-size:12.5px; font-weight:600; color:var(--cream);}
+  .theme-tag{display:block; font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:var(--cream-dim); margin-top:1px;}
 </style>
 </head>
 <body>
 
 <div class="marquee">
-  <h1>SONGBOOK</h1>
+  <div class="marquee-top">
+    <h1>SONGBOOK</h1>
+    <button class="gear-btn" id="settingsBtn" aria-label="Settings">⚙</button>
+  </div>
   <div class="sub" id="rangeLine">YOUR RANGE — LOADING…</div>
 </div>
 
@@ -256,6 +325,18 @@
   <div class="sheet-actions">
     <button class="btn-cancel" id="btnLogCancel">Cancel</button>
     <button class="btn-save" id="btnLogSave">Save</button>
+  </div>
+</div>
+
+<div class="sheet-backdrop" id="settingsBackdrop"></div>
+<div class="sheet" id="settingsSheet">
+  <h2>Settings</h2>
+  <div class="field">
+    <label>COLOR SCHEME</label>
+    <div class="theme-grid" id="themeGrid"></div>
+  </div>
+  <div class="sheet-actions">
+    <button class="btn-cancel" id="btnSettingsClose" style="flex:1;">Done</button>
   </div>
 </div>
 
@@ -678,6 +759,60 @@ document.getElementById("btnLogSave").onclick = async ()=>{
   }
 };
 
+// --- Color scheme settings ---
+const THEMES = [
+  {id:"jukebox", name:"Neon Jukebox", tag:"Default", colors:["#e8b74e","#3ddad7","#1c1420","#f2e9dc"]},
+  {id:"rust", name:"Rust & Rye", tag:"Warm/Americana", colors:["#c9722f","#7fa66b","#1a1512","#f0e6d6"]},
+  {id:"cassette", name:"Cassette Blue", tag:"New wave", colors:["#ff5da2","#4fd3ff","#141a2e","#eef1fb"]},
+  {id:"contrast", name:"High Contrast", tag:"Max legibility", colors:["#ffe600","#00e5ff","#000000","#ffffff"]}
+];
+
+function applyTheme(themeId){
+  document.body.dataset.theme = themeId;
+  try{ localStorage.setItem("songbook-theme", themeId); }catch(e){}
+}
+
+function loadTheme(){
+  let saved = "jukebox";
+  try{ saved = localStorage.getItem("songbook-theme") || "jukebox"; }catch(e){}
+  applyTheme(saved);
+}
+
+function renderThemeGrid(){
+  const grid = document.getElementById("themeGrid");
+  const current = document.body.dataset.theme || "jukebox";
+  grid.innerHTML = THEMES.map(t => `
+    <button class="theme-option ${t.id===current?"active":""}" data-theme-id="${t.id}">
+      <span class="theme-swatch">
+        ${t.colors.map(c=>`<span style="background:${c}"></span>`).join("")}
+      </span>
+      <span>
+        <span class="theme-name">${t.name}</span>
+        <span class="theme-tag">${t.tag}</span>
+      </span>
+    </button>
+  `).join("");
+  grid.querySelectorAll(".theme-option").forEach(btn=>{
+    btn.onclick = () => { applyTheme(btn.dataset.themeId); renderThemeGrid(); };
+  });
+}
+
+const settingsSheet = document.getElementById("settingsSheet");
+const settingsBackdrop = document.getElementById("settingsBackdrop");
+
+document.getElementById("settingsBtn").onclick = () => {
+  renderThemeGrid();
+  settingsBackdrop.classList.add("open");
+  settingsSheet.classList.add("open");
+};
+function closeSettings(){
+  settingsBackdrop.classList.remove("open");
+  settingsSheet.classList.remove("open");
+}
+document.getElementById("btnSettingsClose").onclick = closeSettings;
+settingsBackdrop.onclick = closeSettings;
+
+loadTheme();
 fetchSongs();
 </script>
 </body>
