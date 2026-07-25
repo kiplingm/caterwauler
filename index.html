@@ -215,6 +215,39 @@
   </div>
 </div>
 
+<div class="sheet-backdrop" id="logBackdrop"></div>
+<div class="sheet" id="logSheet">
+  <h2>Log performance</h2>
+  <div id="logSongLabel" class="artist" style="margin-bottom:12px;"></div>
+  <input type="hidden" id="logSongId">
+  <div class="field">
+    <label>DATE</label>
+    <input type="date" id="lDate">
+  </div>
+  <div class="field">
+    <label>VENUE</label>
+    <input type="text" id="lVenue" placeholder="e.g. The Swiss">
+  </div>
+  <div class="field">
+    <label>CROWD RESPONSE</label>
+    <select id="lCrowd">
+      <option value="">—</option>
+      <option>Killed it</option>
+      <option>Solid</option>
+      <option>Mixed</option>
+      <option>Rough</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>NOTES</label>
+    <input type="text" id="lNotes" placeholder="Anything worth remembering…">
+  </div>
+  <div class="sheet-actions">
+    <button class="btn-cancel" id="btnLogCancel">Cancel</button>
+    <button class="btn-save" id="btnLogSave">Save</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -397,12 +430,14 @@ function render(){
         ${s.key_notes ? `<span>${escapeHtml(s.key_notes)}</span>` : ""}
       </div>
       <div class="card-actions">
+        <button class="logBtn primary" data-id="${s.id}">Log</button>
         <button class="editBtn" data-id="${s.id}">Edit</button>
         <button class="delBtn danger" data-id="${s.id}">Delete</button>
       </div>
     </div>
   `).join("");
 
+  document.querySelectorAll(".logBtn").forEach(b=>b.onclick = ()=>openLog(b.dataset.id));
   document.querySelectorAll(".editBtn").forEach(b=>b.onclick = ()=>openEdit(b.dataset.id));
   document.querySelectorAll(".delBtn").forEach(b=>b.onclick = ()=>deleteSong(b.dataset.id));
 }
@@ -500,6 +535,55 @@ async function deleteSong(id){
     showToast("Error: " + err.message);
   }
 }
+
+// --- Log performance sheet ---
+const logSheet = document.getElementById("logSheet");
+const logBackdrop = document.getElementById("logBackdrop");
+
+function openLog(id){
+  const s = songs.find(x=>x.id===id);
+  if(!s) return;
+  document.getElementById("logSongId").value = id;
+  document.getElementById("logSongLabel").textContent = `${s.title} — ${s.artist}`;
+  document.getElementById("lDate").value = new Date().toISOString().slice(0,10);
+  document.getElementById("lVenue").value = "";
+  document.getElementById("lCrowd").value = "";
+  document.getElementById("lNotes").value = "";
+  logBackdrop.classList.add("open");
+  logSheet.classList.add("open");
+}
+function closeLog(){
+  logBackdrop.classList.remove("open");
+  logSheet.classList.remove("open");
+}
+document.getElementById("btnLogCancel").onclick = closeLog;
+logBackdrop.onclick = closeLog;
+
+document.getElementById("btnLogSave").onclick = async ()=>{
+  const songId = document.getElementById("logSongId").value;
+  const date = document.getElementById("lDate").value;
+  if(!songId || !date){ showToast("Date required"); return; }
+
+  const payload = {
+    song_id: songId,
+    performance_date: date,
+    venue: document.getElementById("lVenue").value.trim() || null,
+    crowd_response: document.getElementById("lCrowd").value || null,
+    notes: document.getElementById("lNotes").value.trim() || null
+  };
+
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/performances`, {
+      method:"POST", headers:{...HEADERS, "Prefer":"return=representation"}, body: JSON.stringify(payload)
+    });
+    if(!res.ok) throw new Error("Log failed");
+    showToast("Performance logged");
+    closeLog();
+    fetchSongs();
+  }catch(err){
+    showToast("Error: " + err.message);
+  }
+};
 
 fetchSongs();
 </script>
