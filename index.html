@@ -50,6 +50,12 @@
     padding:11px 12px; color:var(--cream); font-size:15px; font-family:'Inter',sans-serif;
   }
   input[type=text]:focus{outline:none; border-color:var(--teal);}
+  .sort-select{
+    flex:none; background:var(--bg-raised); border:1px solid var(--line); border-radius:10px;
+    padding:11px 8px; color:var(--cream-dim); font-size:12.5px; font-family:'IBM Plex Mono',monospace;
+    max-width:112px;
+  }
+  .sort-select:focus{outline:none; border-color:var(--teal);}
   .filter-chips{display:flex; gap:6px; overflow-x:auto; padding-bottom:2px;}
   .chip{
     flex:none; font-family:'IBM Plex Mono',monospace; font-size:11.5px; letter-spacing:0.3px;
@@ -148,6 +154,11 @@
 <div class="controls">
   <div class="search-row">
     <input type="text" id="search" placeholder="Search title or artist…">
+    <select id="sortSelect" class="sort-select">
+      <option value="fit">Best fit</option>
+      <option value="title">Title</option>
+      <option value="lastPlayed">Last played</option>
+    </select>
   </div>
   <div class="filter-chips" id="chips"></div>
 </div>
@@ -242,6 +253,12 @@ document.getElementById("rangeLine").textContent =
 let songs = [];
 let activeFilter = "All";
 let searchTerm = "";
+let sortMode = "fit";
+
+document.getElementById("sortSelect").addEventListener("change", e=>{
+  sortMode = e.target.value;
+  render();
+});
 
 const listEl = document.getElementById("list");
 const countRow = document.getElementById("countRow");
@@ -270,9 +287,23 @@ function showToast(msg){
 
 async function fetchSongs(){
   try{
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/songs?select=*&order=title.asc`, {headers: HEADERS});
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/songs?select=*,performances(performance_date)&order=title.asc`,
+      {headers: HEADERS}
+    );
     if(!res.ok) throw new Error("Fetch failed: " + res.status);
-    songs = await res.json();
+    const raw = await res.json();
+    songs = raw.map(s => {
+      const dates = (s.performances || [])
+        .map(p => p.performance_date)
+        .filter(Boolean)
+        .sort();
+      return {
+        ...s,
+        last_played: dates.length ? dates[dates.length-1] : null,
+        fit_score: fitScore(s.low_note, s.high_note)
+      };
+    });
     render();
   }catch(err){
     listEl.innerHTML = `<div class="empty">Couldn't load songbook.<br>${err.message}</div>`;
@@ -284,6 +315,15 @@ function fitLabel(lowS, highS){
   if(lowS >= comfortLowS && highS <= comfortHighS) return {cls:"fit-easy", text:"EASY FIT"};
   if(lowS >= stretchLowS && highS <= stretchHighS) return {cls:"fit-stretch", text:"STRETCH"};
   return {cls:"fit-out", text:"OUT OF RANGE"};
+}
+
+// Lower score = better fit against comfort zone. Unknown ranges sort last.
+function fitScore(low, high){
+  const lowS = noteToSemitone(low), highS = noteToSemitone(high);
+  if(lowS===null || highS===null) return Infinity;
+  const below = Math.max(0, comfortLowS - lowS);
+  const above = Math.max(0, highS - comfortHighS);
+  return below + above;
 }
 
 function renderRangeStrip(low, high){
@@ -318,6 +358,22 @@ function render(){
     return matchesFilter && matchesSearch;
   });
 
+  filtered = filtered.slice().sort((a,b)=>{
+    if(sortMode === "title"){
+      return (a.title||"").localeCompare(b.title||"");
+    }
+    if(sortMode === "lastPlayed"){
+      // Most recently played first; never-played songs sort last.
+      if(!a.last_played && !b.last_played) return (a.title||"").localeCompare(b.title||"");
+      if(!a.last_played) return 1;
+      if(!b.last_played) return -1;
+      return b.last_played.localeCompare(a.last_played);
+    }
+    // fit: best range match first, tie-broken by title
+    if(a.fit_score !== b.fit_score) return a.fit_score - b.fit_score;
+    return (a.title||"").localeCompare(b.title||"");
+  });
+
   countRow.textContent = `${filtered.length} of ${songs.length} songs`;
 
   if(filtered.length===0){
@@ -337,6 +393,7 @@ function render(){
       ${renderRangeStrip(s.low_note, s.high_note)}
       <div class="card-meta">
         ${s.genre ? `<span>${escapeHtml(s.genre)}</span>` : ""}
+        ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : ""}
         ${s.key_notes ? `<span>${escapeHtml(s.key_notes)}</span>` : ""}
       </div>
       <div class="card-actions">
@@ -348,6 +405,11 @@ function render(){
 
   document.querySelectorAll(".editBtn").forEach(b=>b.onclick = ()=>openEdit(b.dataset.id));
   document.querySelectorAll(".delBtn").forEach(b=>b.onclick = ()=>deleteSong(b.dataset.id));
+}
+
+function formatDate(iso){
+  const d = new Date(iso + "T00:00:00");
+  return d.toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"});
 }
 
 function escapeHtml(str){
