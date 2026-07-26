@@ -232,7 +232,13 @@
   .log-history-top{display:flex; justify-content:space-between; align-items:baseline; gap:8px;}
   .log-history-date{font-weight:700; font-size:13px;}
   .log-history-crowd{font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--cream-dim); flex:none;}
-  .log-history-venue{font-size:12.5px; color:var(--cream-dim); margin-top:2px;}
+  .log-history-venue{font-size:12.5px; color:var(--cream-dim); margin-top:2px; display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;}
+  .directions-link{
+    color:var(--teal); font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:0.2px;
+    text-decoration:none; white-space:nowrap;
+  }
+  .directions-link:hover{text-decoration:underline;}
+  .venue-directions-row{margin-top:6px;}
   .log-history-notes{font-size:12px; color:var(--cream-dim); margin-top:4px; font-style:italic;}
   .log-history-actions{display:flex; gap:8px; margin-top:8px;}
   .log-history-actions button{
@@ -409,6 +415,9 @@
     <label>VENUE</label>
     <input type="text" id="lVenue" placeholder="e.g. The Swiss" autocomplete="off">
     <div class="autocomplete-list" id="venueSuggestions"></div>
+    <div class="venue-directions-row" id="venueDirectionsRow" style="display:none;">
+      <a class="directions-link" id="venueDirectionsLink" href="#" target="_blank" rel="noopener">Directions ↗</a>
+    </div>
   </div>
   <div class="field">
     <label>CROWD RESPONSE</label>
@@ -738,6 +747,10 @@ function escapeHtml(str){
   return d.innerHTML;
 }
 
+function mapsDirectionsUrl(venue){
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(venue)}`;
+}
+
 // --- Sheet (add/edit) ---
 const sheet = document.getElementById("sheet");
 const backdrop = document.getElementById("backdrop");
@@ -863,7 +876,7 @@ function renderLogHistory(entries){
             <div class="log-history-date">${formatDate(e.performance_date)}</div>
             ${e.crowd_response ? `<div class="log-history-crowd">${escapeHtml(e.crowd_response)}</div>` : ""}
           </div>
-          ${e.venue ? `<div class="log-history-venue">${escapeHtml(e.venue)}</div>` : ""}
+          ${e.venue ? `<div class="log-history-venue">${escapeHtml(e.venue)} <a class="directions-link" href="${mapsDirectionsUrl(e.venue)}" target="_blank" rel="noopener">Directions ↗</a></div>` : ""}
           ${e.notes ? `<div class="log-history-notes">${escapeHtml(e.notes)}</div>` : ""}
           <div class="log-history-actions">
             <button class="logEditBtn" data-id="${e.id}">Edit</button>
@@ -894,6 +907,7 @@ function startEditPerformance(entry){
   document.getElementById("btnLogSave").textContent = "Update";
   document.getElementById("logEditingText").textContent = `Editing ${formatDate(entry.performance_date)} entry`;
   document.getElementById("logEditingBanner").style.display = "flex";
+  updateVenueDirectionsLink();
 }
 
 function resetLogForm(){
@@ -905,6 +919,7 @@ function resetLogForm(){
   document.getElementById("logSheetTitle").textContent = "Log performance";
   document.getElementById("btnLogSave").textContent = "Save";
   document.getElementById("logEditingBanner").style.display = "none";
+  updateVenueDirectionsLink();
 }
 document.getElementById("btnCancelEditEntry").onclick = resetLogForm;
 
@@ -1103,15 +1118,28 @@ function renderVenueSuggestions({previous, places}){
   list.querySelectorAll(".venue-item").forEach(el=>{
     el.onclick = () => {
       document.getElementById("lVenue").value = el.dataset.value;
+      updateVenueDirectionsLink();
       list.classList.remove("open");
     };
   });
   list.classList.add("open");
 }
 
+function updateVenueDirectionsLink(){
+  const venue = document.getElementById("lVenue").value.trim();
+  const row = document.getElementById("venueDirectionsRow");
+  if(venue){
+    document.getElementById("venueDirectionsLink").href = mapsDirectionsUrl(venue);
+    row.style.display = "block";
+  }else{
+    row.style.display = "none";
+  }
+}
+
 document.getElementById("lVenue").addEventListener("input", () => {
   clearTimeout(venueDebounce);
   const q = document.getElementById("lVenue").value;
+  updateVenueDirectionsLink();
   const list = document.getElementById("venueSuggestions");
   if(q.trim().length < 2){ list.classList.remove("open"); return; }
   venueDebounce = setTimeout(async () => {
