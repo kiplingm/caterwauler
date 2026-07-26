@@ -1,5 +1,5 @@
-# karaoke-tracker
-Live karaoke songbook synced to Supabase
+# RokeMaybe
+Live karaoke songbook synced to Supabase. (Repo is still named `karaoke-tracker` so the existing GitHub Pages URL keeps working.)
 
 ## Structure
 - `index.html` — markup and sheet layouts
