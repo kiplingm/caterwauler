@@ -214,6 +214,41 @@
   .autocomplete-empty{
     padding:10px 12px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cream-dim);
   }
+  .ac-group-label{
+    padding:7px 12px 3px; font-family:'IBM Plex Mono',monospace; font-size:9.5px; letter-spacing:0.6px;
+    color:var(--cream-dim); text-transform:uppercase; opacity:0.8;
+  }
+
+  .log-history{margin-bottom:14px;}
+  .log-history-title{
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:0.5px;
+    color:var(--cream-dim); text-transform:uppercase; margin-bottom:8px;
+  }
+  .log-history-empty{
+    font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--cream-dim); padding:2px 0 4px;
+  }
+  .log-history-list{display:flex; flex-direction:column; gap:8px; max-height:220px; overflow-y:auto; margin-bottom:2px;}
+  .log-history-item{background:var(--bg-raised); border:1px solid var(--line); border-radius:10px; padding:10px 12px;}
+  .log-history-top{display:flex; justify-content:space-between; align-items:baseline; gap:8px;}
+  .log-history-date{font-weight:700; font-size:13px;}
+  .log-history-crowd{font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--cream-dim); flex:none;}
+  .log-history-venue{font-size:12.5px; color:var(--cream-dim); margin-top:2px;}
+  .log-history-notes{font-size:12px; color:var(--cream-dim); margin-top:4px; font-style:italic;}
+  .log-history-actions{display:flex; gap:8px; margin-top:8px;}
+  .log-history-actions button{
+    flex:1; font-family:'Inter',sans-serif; font-size:11.5px; font-weight:600;
+    padding:6px 0; border-radius:7px; border:1px solid var(--line); background:transparent; color:var(--cream-dim);
+  }
+  .log-history-actions button.danger{border-color:var(--red); color:var(--red);}
+  .log-editing-banner{
+    display:flex; justify-content:space-between; align-items:center; gap:8px;
+    background:rgba(232,183,78,0.1); border:1px solid var(--gold); border-radius:10px;
+    padding:8px 12px; margin-bottom:14px; font-size:12px; color:var(--gold);
+  }
+  .log-editing-banner button{
+    background:transparent; border:none; color:var(--gold); font-weight:700; font-size:11.5px;
+    text-decoration:underline; padding:0; flex:none;
+  }
   .sheet-actions{display:flex; gap:10px; margin-top:16px;}
   .sheet-actions button{flex:1; padding:12px 0; border-radius:10px; font-weight:700; font-size:14px; border:none;}
   .btn-save{background:var(--gold); color:#1c1420;}
@@ -354,16 +389,26 @@
 
 <div class="sheet-backdrop" id="logBackdrop"></div>
 <div class="sheet" id="logSheet">
-  <h2>Log performance</h2>
+  <h2 id="logSheetTitle">Log performance</h2>
   <div id="logSongLabel" class="artist" style="margin-bottom:12px;"></div>
   <input type="hidden" id="logSongId">
+  <input type="hidden" id="logEntryId">
+
+  <div class="log-history" id="logHistory"></div>
+
+  <div class="log-editing-banner" id="logEditingBanner" style="display:none;">
+    <span id="logEditingText">Editing entry</span>
+    <button type="button" id="btnCancelEditEntry">Cancel edit</button>
+  </div>
+
   <div class="field">
     <label>DATE</label>
     <input type="date" id="lDate">
   </div>
-  <div class="field">
+  <div class="field autocomplete-field">
     <label>VENUE</label>
-    <input type="text" id="lVenue" placeholder="e.g. The Swiss">
+    <input type="text" id="lVenue" placeholder="e.g. The Swiss" autocomplete="off">
+    <div class="autocomplete-list" id="venueSuggestions"></div>
   </div>
   <div class="field">
     <label>CROWD RESPONSE</label>
@@ -790,18 +835,89 @@ async function deleteSong(id, opts={}){
 // --- Log performance sheet ---
 const logSheet = document.getElementById("logSheet");
 const logBackdrop = document.getElementById("logBackdrop");
+let currentLogEntries = [];
 
-function openLog(id){
-  const s = songs.find(x=>x.id===id);
-  if(!s) return;
-  document.getElementById("logSongId").value = id;
-  document.getElementById("logSongLabel").textContent = `${s.title} — ${s.artist}`;
+async function fetchPerformances(songId){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/performances?song_id=eq.${songId}&order=performance_date.desc`, {headers: HEADERS});
+    if(!res.ok) throw new Error("Fetch failed");
+    return await res.json();
+  }catch(e){
+    return [];
+  }
+}
+
+function renderLogHistory(entries){
+  currentLogEntries = entries;
+  const el = document.getElementById("logHistory");
+  if(entries.length === 0){
+    el.innerHTML = `<div class="log-history-title">Past performances</div><div class="log-history-empty">No logged performances yet.</div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div class="log-history-title">Past performances (${entries.length})</div>
+    <div class="log-history-list">
+      ${entries.map(e => `
+        <div class="log-history-item" data-id="${e.id}">
+          <div class="log-history-top">
+            <div class="log-history-date">${formatDate(e.performance_date)}</div>
+            ${e.crowd_response ? `<div class="log-history-crowd">${escapeHtml(e.crowd_response)}</div>` : ""}
+          </div>
+          ${e.venue ? `<div class="log-history-venue">${escapeHtml(e.venue)}</div>` : ""}
+          ${e.notes ? `<div class="log-history-notes">${escapeHtml(e.notes)}</div>` : ""}
+          <div class="log-history-actions">
+            <button class="logEditBtn" data-id="${e.id}">Edit</button>
+            <button class="logDelBtn danger" data-id="${e.id}">Delete</button>
+          </div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+  el.querySelectorAll(".logEditBtn").forEach(b=>{
+    b.onclick = () => {
+      const entry = currentLogEntries.find(x=>String(x.id)===b.dataset.id);
+      if(entry) startEditPerformance(entry);
+    };
+  });
+  el.querySelectorAll(".logDelBtn").forEach(b=>{
+    b.onclick = () => deletePerformance(b.dataset.id);
+  });
+}
+
+function startEditPerformance(entry){
+  document.getElementById("logEntryId").value = entry.id;
+  document.getElementById("lDate").value = entry.performance_date;
+  document.getElementById("lVenue").value = entry.venue || "";
+  document.getElementById("lCrowd").value = entry.crowd_response || "";
+  document.getElementById("lNotes").value = entry.notes || "";
+  document.getElementById("logSheetTitle").textContent = "Edit performance";
+  document.getElementById("btnLogSave").textContent = "Update";
+  document.getElementById("logEditingText").textContent = `Editing ${formatDate(entry.performance_date)} entry`;
+  document.getElementById("logEditingBanner").style.display = "flex";
+}
+
+function resetLogForm(){
+  document.getElementById("logEntryId").value = "";
   document.getElementById("lDate").value = new Date().toISOString().slice(0,10);
   document.getElementById("lVenue").value = "";
   document.getElementById("lCrowd").value = "";
   document.getElementById("lNotes").value = "";
+  document.getElementById("logSheetTitle").textContent = "Log performance";
+  document.getElementById("btnLogSave").textContent = "Save";
+  document.getElementById("logEditingBanner").style.display = "none";
+}
+document.getElementById("btnCancelEditEntry").onclick = resetLogForm;
+
+async function openLog(id){
+  const s = songs.find(x=>x.id===id);
+  if(!s) return;
+  document.getElementById("logSongId").value = id;
+  document.getElementById("logSongLabel").textContent = `${s.title} — ${s.artist}`;
+  resetLogForm();
+  document.getElementById("logHistory").innerHTML = `<div class="log-history-title">Past performances</div><div class="log-history-empty">Loading…</div>`;
   logBackdrop.classList.add("open");
   logSheet.classList.add("open");
+  renderLogHistory(await fetchPerformances(id));
 }
 function closeLog(){
   logBackdrop.classList.remove("open");
@@ -810,8 +926,25 @@ function closeLog(){
 document.getElementById("btnLogCancel").onclick = closeLog;
 logBackdrop.onclick = closeLog;
 
+async function deletePerformance(entryId){
+  if(!confirm("Delete this performance log entry?")) return;
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/performances?id=eq.${entryId}`, {method:"DELETE", headers: HEADERS});
+    if(!res.ok) throw new Error("Delete failed");
+    showToast("Entry deleted");
+    if(document.getElementById("logEntryId").value === String(entryId)) resetLogForm();
+    const songId = document.getElementById("logSongId").value;
+    renderLogHistory(await fetchPerformances(songId));
+    venueHistory = null; // invalidate venue cache since a venue entry changed
+    fetchSongs();
+  }catch(err){
+    showToast("Error: " + err.message);
+  }
+}
+
 document.getElementById("btnLogSave").onclick = async ()=>{
   const songId = document.getElementById("logSongId").value;
+  const entryId = document.getElementById("logEntryId").value;
   const date = document.getElementById("lDate").value;
   if(!songId || !date){ showToast("Date required"); return; }
 
@@ -824,17 +957,131 @@ document.getElementById("btnLogSave").onclick = async ()=>{
   };
 
   try{
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/performances`, {
-      method:"POST", headers:{...HEADERS, "Prefer":"return=representation"}, body: JSON.stringify(payload)
-    });
-    if(!res.ok) throw new Error("Log failed");
-    showToast("Performance logged");
-    closeLog();
+    let res;
+    if(entryId){
+      res = await fetch(`${SUPABASE_URL}/rest/v1/performances?id=eq.${entryId}`, {
+        method:"PATCH", headers:{...HEADERS, "Prefer":"return=representation"}, body: JSON.stringify(payload)
+      });
+      if(!res.ok) throw new Error("Update failed");
+      showToast("Performance updated");
+    }else{
+      res = await fetch(`${SUPABASE_URL}/rest/v1/performances`, {
+        method:"POST", headers:{...HEADERS, "Prefer":"return=representation"}, body: JSON.stringify(payload)
+      });
+      if(!res.ok) throw new Error("Log failed");
+      showToast("Performance logged");
+    }
+    venueHistory = null; // invalidate venue cache since a venue entry changed
+    renderLogHistory(await fetchPerformances(songId));
+    resetLogForm();
     fetchSongs();
   }catch(err){
     showToast("Error: " + err.message);
   }
 };
+
+// --- Venue autocomplete: previous venues you've logged, then real-world places ---
+let venueHistory = null;
+let venueDebounce = null;
+
+async function loadVenueHistory(){
+  if(venueHistory) return venueHistory;
+  try{
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/performances?select=venue,performance_date&venue=not.is.null&order=performance_date.desc&limit=500`,
+      {headers: HEADERS}
+    );
+    if(!res.ok) throw new Error();
+    const rows = await res.json();
+    const seen = new Set();
+    venueHistory = [];
+    rows.forEach(r=>{
+      const v = (r.venue || "").trim();
+      const key = v.toLowerCase();
+      if(v && !seen.has(key)){ seen.add(key); venueHistory.push(v); }
+    });
+  }catch(e){
+    venueHistory = [];
+  }
+  return venueHistory;
+}
+
+async function searchVenues(query){
+  const q = query.trim().toLowerCase();
+  const history = await loadVenueHistory();
+  const previous = history.filter(v => v.toLowerCase().includes(q)).slice(0, 5);
+
+  let places = [];
+  if(query.trim().length >= 3){
+    try{
+      const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query.trim())}&limit=5&lat=47.2529&lon=-122.4443`;
+      const res = await fetch(url);
+      if(res.ok){
+        const data = await res.json();
+        places = (data.features || []).map(f=>{
+          const p = f.properties || {};
+          const locality = [p.city || p.county, p.state].filter(Boolean).join(", ");
+          return {label: p.name || p.street || "", sub: locality};
+        }).filter(p => p.label && !previous.some(v=>v.toLowerCase()===p.label.toLowerCase()));
+      }
+    }catch(e){
+      // No network access or Photon unreachable — fall back to previous-venue matches only
+    }
+  }
+  return {previous, places};
+}
+
+function renderVenueSuggestions({previous, places}){
+  const list = document.getElementById("venueSuggestions");
+  if(previous.length === 0 && places.length === 0){
+    list.innerHTML = `<div class="autocomplete-empty">No matches — keep typing, or enter a new venue</div>`;
+    list.classList.add("open");
+    return;
+  }
+  let html = "";
+  if(previous.length){
+    html += `<div class="ac-group-label">Previous venues</div>`;
+    html += previous.map(v => `
+      <div class="autocomplete-item venue-item" data-value="${escapeHtml(v)}">
+        <div class="ac-title">${escapeHtml(v)}</div>
+      </div>
+    `).join("");
+  }
+  if(places.length){
+    html += `<div class="ac-group-label">Places</div>`;
+    html += places.map(p => `
+      <div class="autocomplete-item venue-item" data-value="${escapeHtml(p.label)}">
+        <div class="ac-title">${escapeHtml(p.label)}</div>
+        ${p.sub ? `<div class="ac-artist">${escapeHtml(p.sub)}</div>` : ""}
+      </div>
+    `).join("");
+  }
+  list.innerHTML = html;
+  list.querySelectorAll(".venue-item").forEach(el=>{
+    el.onclick = () => {
+      document.getElementById("lVenue").value = el.dataset.value;
+      list.classList.remove("open");
+    };
+  });
+  list.classList.add("open");
+}
+
+document.getElementById("lVenue").addEventListener("input", () => {
+  clearTimeout(venueDebounce);
+  const q = document.getElementById("lVenue").value;
+  const list = document.getElementById("venueSuggestions");
+  if(q.trim().length < 2){ list.classList.remove("open"); return; }
+  venueDebounce = setTimeout(async () => {
+    renderVenueSuggestions(await searchVenues(q));
+  }, 250);
+});
+document.getElementById("lVenue").addEventListener("blur", () => {
+  setTimeout(() => document.getElementById("venueSuggestions").classList.remove("open"), 150);
+});
+document.getElementById("lVenue").addEventListener("focus", () => {
+  const list = document.getElementById("venueSuggestions");
+  if(list.innerHTML.trim()) list.classList.add("open");
+});
 
 // --- Catalog autocomplete (searches your 84k-song karafun_catalog table) ---
 let acDebounce = null;
