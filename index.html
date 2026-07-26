@@ -90,6 +90,11 @@
   .gear-btn:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible{
     outline:2px solid var(--teal); outline-offset:2px;
   }
+  .icon-btn-wrap{display:flex; flex-direction:column; align-items:center; gap:3px;}
+  .icon-btn-label{
+    font-family:'IBM Plex Mono',monospace; font-size:8.5px; letter-spacing:0.3px;
+    color:var(--cream-dim); text-transform:uppercase; opacity:0.8;
+  }
   .marquee .sub{
     font-family:'IBM Plex Mono',monospace;
     font-size:11px;
@@ -146,6 +151,11 @@
   .range-fit.fit-out .transpose-suggestion{
     display:block; margin-top:3px; color:var(--teal);
   }
+  .range-source-tag{
+    margin-left:6px; font-size:9.5px; letter-spacing:0.3px; opacity:0.75; text-transform:none;
+    border-bottom:1px dotted currentColor; cursor:help;
+  }
+  .range-source-verified{color:var(--green); opacity:0.9;}
 
   .range-strip{margin-top:12px;}
   .range-track{
@@ -311,6 +321,10 @@
   .toast.show{opacity:1;}
 
   .empty{padding:40px 20px; text-align:center; color:var(--cream-dim); font-family:'IBM Plex Mono',monospace; font-size:12.5px;}
+  .retry-btn{
+    margin-top:14px; padding:9px 20px; border-radius:9px; border:1px solid var(--teal);
+    background:transparent; color:var(--teal); font-family:'Inter',sans-serif; font-size:13px; font-weight:700;
+  }
   .loading{padding:40px 20px; text-align:center; color:var(--cream-dim); font-family:'IBM Plex Mono',monospace; font-size:12px;}
 
   .theme-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
@@ -373,8 +387,14 @@
     <div class="marquee-top">
       <h1>SONGBOOK</h1>
       <div class="marquee-actions">
-        <button class="gear-btn" id="recBtn" aria-label="Recommendations">✨</button>
-        <button class="gear-btn" id="settingsBtn" aria-label="Settings">⚙</button>
+        <div class="icon-btn-wrap">
+          <button class="gear-btn" id="recBtn" aria-label="Recommendations">✨</button>
+          <span class="icon-btn-label">Recs</span>
+        </div>
+        <div class="icon-btn-wrap">
+          <button class="gear-btn" id="settingsBtn" aria-label="Settings">⚙</button>
+          <span class="icon-btn-label">Settings</span>
+        </div>
       </div>
     </div>
     <div class="sub" id="rangeLine">YOUR RANGE — LOADING…</div>
@@ -527,6 +547,10 @@
     <button class="check-missing-btn" id="checkOutOfRangeBtn" style="margin-top:10px;">Check for out-of-range songs</button>
     <div id="outOfRangeResults"></div>
   </div>
+  <div class="field">
+    <label>BACKUP</label>
+    <button class="check-missing-btn" id="exportDataBtn">Export my data (JSON)</button>
+  </div>
   <div class="sheet-actions">
     <button class="btn-cancel" id="btnSettingsClose" style="flex:1;">Done</button>
   </div>
@@ -660,7 +684,13 @@ async function fetchSongs(){
     });
     render();
   }catch(err){
-    listEl.innerHTML = `<div class="empty">Couldn't load songbook.<br>${err.message}</div>`;
+    listEl.innerHTML = `
+      <div class="empty">
+        Couldn't load your songbook.<br>${escapeHtml(err.message)}
+        <br><button class="retry-btn" id="retryFetchBtn">Retry</button>
+      </div>`;
+    const retryBtn = document.getElementById("retryFetchBtn");
+    if(retryBtn) retryBtn.onclick = fetchSongs;
   }
 }
 
@@ -727,7 +757,7 @@ function transpositionMessage(lowS, highS){
   return `Try shifting ${dir} ${Math.abs(shift)} semitone${Math.abs(shift)===1?"":"s"} (${newLow}–${newHigh}) for ${zoneLabel}.`;
 }
 
-function renderRangeStrip(low, high){
+function renderRangeStrip(low, high, rangeSource){
   const lowS = noteToSemitone(low), highS = noteToSemitone(high);
   const spanLow = stretchLowS - 2, spanHigh = stretchHighS + 2;
   const span = spanHigh - spanLow;
@@ -744,6 +774,11 @@ function renderRangeStrip(low, high){
   const suggestionHtml = fit.cls === "fit-out"
     ? `<span class="transpose-suggestion">${transpositionMessage(lowS, highS)}</span>`
     : "";
+  const sourceTag = (lowS!==null && highS!==null && rangeSource === "estimated")
+    ? `<span class="range-source-tag" title="Filled in as a best-guess estimate, not individually verified">est.</span>`
+    : (lowS!==null && highS!==null && rangeSource === "verified")
+    ? `<span class="range-source-tag range-source-verified" title="Checked against a specific vocal reference">✓ verified</span>`
+    : "";
   return `
     <div class="range-strip">
       <div class="range-track">
@@ -751,7 +786,7 @@ function renderRangeStrip(low, high){
         ${songBar}
       </div>
       <div class="range-labels"><span>${STRETCH_LOW}</span><span>${STRETCH_HIGH}</span></div>
-      <div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${suggestionHtml}</div>
+      <div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${sourceTag}${suggestionHtml}</div>
     </div>`;
 }
 
@@ -804,7 +839,7 @@ function render(){
           <div class="status-pill status-${s.status}" data-id="${s.id}">${s.status}</div>
         `}
       </div>
-      ${renderRangeStrip(s.low_note, s.high_note)}
+      ${renderRangeStrip(s.low_note, s.high_note, s.range_source)}
       <div class="card-meta">
         ${s.genre ? `<span>${escapeHtml(s.genre)}</span>` : ""}
         ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : ""}
@@ -916,6 +951,13 @@ document.getElementById("btnSave").onclick = async ()=>{
   const artist = document.getElementById("fArtist").value.trim();
   if(!title || !artist){ showToast("Title and artist required"); return; }
 
+  if(!id){
+    const dupe = songs.find(s => normalizeForMatch(s.title) === normalizeForMatch(title) && normalizeForMatch(s.artist) === normalizeForMatch(artist));
+    if(dupe && !confirm(`"${dupe.title}" by ${dupe.artist} is already in your songbook (status: ${dupe.status}). Add it again as a duplicate?`)){
+      return;
+    }
+  }
+
   const payload = {
     title,
     artist,
@@ -924,6 +966,7 @@ document.getElementById("btnSave").onclick = async ()=>{
     status: document.getElementById("fStatus").value,
     genre: document.getElementById("fGenre").value.trim() || null,
     key_notes: document.getElementById("fKeyNotes").value.trim() || null,
+    range_source: "manual",
     updated_at: new Date().toISOString()
   };
 
@@ -949,7 +992,14 @@ document.getElementById("btnSave").onclick = async ()=>{
 };
 
 async function deleteSong(id, opts={}){
-  if(!opts.skipConfirm && !confirm("Delete this song?")) return;
+  if(!opts.skipConfirm){
+    const s = songs.find(x=>x.id===id);
+    const perfCount = s && s.performances ? s.performances.length : 0;
+    const warning = perfCount > 0
+      ? `Delete this song? This also permanently deletes its ${perfCount} logged performance${perfCount===1?"":"s"} (venue, dates, notes).`
+      : "Delete this song?";
+    if(!confirm(warning)) return;
+  }
   try{
     const res = await fetch(`${SUPABASE_URL}/rest/v1/songs?id=eq.${id}`, {method:"DELETE", headers: HEADERS});
     if(!res.ok) throw new Error("Delete failed");
@@ -1182,6 +1232,8 @@ async function searchPlaces(query){
   return results;
 }
 
+const placeSearchCache = new Map(); // query (lowercased, trimmed) -> places[]
+
 async function searchVenues(query){
   const q = query.trim().toLowerCase();
   const history = await loadVenueHistory();
@@ -1189,19 +1241,24 @@ async function searchVenues(query){
 
   let places = [];
   if(query.trim().length >= 3){
-    try{
-      const raw = await searchPlaces(query);
-      places = raw.filter(p => !previous.some(v=>v.toLowerCase()===p.label.toLowerCase()));
-      // De-dupe by label since Nominatim can return near-duplicate rows
-      const seen = new Set();
-      places = places.filter(p=>{
-        const key = p.label.toLowerCase();
-        if(seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      }).slice(0, 5);
-    }catch(e){
-      // No network access or providers unreachable — fall back to previous-venue matches only
+    if(placeSearchCache.has(q)){
+      places = placeSearchCache.get(q).filter(p => !previous.some(v=>v.toLowerCase()===p.label.toLowerCase()));
+    }else{
+      try{
+        const raw = await searchPlaces(query);
+        places = raw.filter(p => !previous.some(v=>v.toLowerCase()===p.label.toLowerCase()));
+        // De-dupe by label since Nominatim can return near-duplicate rows
+        const seen = new Set();
+        places = places.filter(p=>{
+          const key = p.label.toLowerCase();
+          if(seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        }).slice(0, 5);
+        placeSearchCache.set(q, places);
+      }catch(e){
+        // No network access or providers unreachable — fall back to previous-venue matches only
+      }
     }
   }
   return {previous, places};
@@ -1388,21 +1445,53 @@ async function openRecommendations(){
   try{
     const candidates = [];
     const seenKeys = new Set();
-    for(const artist of artists){
-      if(candidates.length >= 60) break; // cap catalog scanning; range-checked results will be fewer
-      const term = `*${artist}*`;
-      const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/karafun_catalog?select=title,artist&artist=ilike.${encodeURIComponent(term)}&limit=10&order=title.asc`,
-        {headers: HEADERS}
-      );
-      if(!res.ok) continue;
-      const rows = await res.json();
-      rows.forEach(r=>{
-        const key = `${(r.title||"").toLowerCase()}|${(r.artist||"").toLowerCase()}`;
-        if(known.has(key) || seenKeys.has(key)) return;
-        seenKeys.add(key);
-        candidates.push({...r, sourceArtist: artist});
-      });
+    const perArtistCount = {};
+    const CHUNK_SIZE = 8; // keeps the OR-query URL reasonably short
+
+    for(let i = 0; i < artists.length && candidates.length < 60; i += CHUNK_SIZE){
+      const chunk = artists.slice(i, i + CHUNK_SIZE);
+      // Postgrest OR syntax needs literal commas between conditions, so artists
+      // containing a comma (rare) are skipped from batching and looked up individually below.
+      const batchable = chunk.filter(a => !a.includes(","));
+      const skipped = chunk.filter(a => a.includes(","));
+
+      if(batchable.length > 0){
+        const orClause = batchable.map(a => `artist.ilike.${encodeURIComponent(`*${a}*`)}`).join(",");
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/karafun_catalog?select=title,artist&or=(${orClause})&limit=200&order=artist.asc`,
+          {headers: HEADERS}
+        );
+        if(res.ok){
+          const rows = await res.json();
+          rows.forEach(r=>{
+            const matchedArtist = batchable.find(a => (r.artist||"").toLowerCase().includes(a.toLowerCase()));
+            if(!matchedArtist) return;
+            const key = `${(r.title||"").toLowerCase()}|${(r.artist||"").toLowerCase()}`;
+            if(known.has(key) || seenKeys.has(key)) return;
+            if((perArtistCount[matchedArtist]||0) >= 10) return; // cap per artist, same as before
+            perArtistCount[matchedArtist] = (perArtistCount[matchedArtist]||0) + 1;
+            seenKeys.add(key);
+            candidates.push({...r, sourceArtist: matchedArtist});
+          });
+        }
+      }
+
+      for(const artist of skipped){
+        if(candidates.length >= 60) break;
+        const term = `*${artist}*`;
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/karafun_catalog?select=title,artist&artist=ilike.${encodeURIComponent(term)}&limit=10&order=title.asc`,
+          {headers: HEADERS}
+        );
+        if(!res.ok) continue;
+        const rows = await res.json();
+        rows.forEach(r=>{
+          const key = `${(r.title||"").toLowerCase()}|${(r.artist||"").toLowerCase()}`;
+          if(known.has(key) || seenKeys.has(key)) return;
+          seenKeys.add(key);
+          candidates.push({...r, sourceArtist: artist});
+        });
+      }
     }
 
     // Gate every candidate on vocal range before it's shown for consideration.
@@ -1482,7 +1571,7 @@ async function addRecommendation(rec, itemEl){
   try{
     const res = await fetch(`${SUPABASE_URL}/rest/v1/songs`, {
       method:"POST", headers:{...HEADERS, "Prefer":"return=representation"},
-      body: JSON.stringify({title: rec.title, artist: rec.artist, status: "Learning", low_note: rec.low_note || null, high_note: rec.high_note || null})
+      body: JSON.stringify({title: rec.title, artist: rec.artist, status: "Learning", low_note: rec.low_note || null, high_note: rec.high_note || null, range_source: rec.low_note ? "estimated" : "manual"})
     });
     if(!res.ok) throw new Error("Add failed");
     showToast(`Added "${rec.title}" to Learning`);
@@ -1545,6 +1634,45 @@ function closeSettings(){
 }
 document.getElementById("btnSettingsClose").onclick = closeSettings;
 settingsBackdrop.onclick = closeSettings;
+
+document.getElementById("exportDataBtn").onclick = async () => {
+  const btn = document.getElementById("exportDataBtn");
+  const originalText = btn.textContent;
+  btn.textContent = "Exporting…";
+  btn.disabled = true;
+  try{
+    const [songsRes, perfRes, rangesRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/songs?select=*`, {headers: HEADERS}),
+      fetch(`${SUPABASE_URL}/rest/v1/performances?select=*`, {headers: HEADERS}),
+      fetch(`${SUPABASE_URL}/rest/v1/song_ranges?select=*`, {headers: HEADERS})
+    ]);
+    if(!songsRes.ok || !perfRes.ok || !rangesRes.ok) throw new Error("One or more tables failed to export");
+    const [songsData, perfData, rangesData] = await Promise.all([songsRes.json(), perfRes.json(), rangesRes.json()]);
+
+    const exportPayload = {
+      exported_at: new Date().toISOString(),
+      source: "kiplingm/karaoke-tracker",
+      songs: songsData,
+      performances: perfData,
+      song_ranges: rangesData
+    };
+    const blob = new Blob([JSON.stringify(exportPayload, null, 2)], {type: "application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `songbook-backup-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast(`Backup downloaded (${songsData.length} songs, ${perfData.length} performances)`);
+  }catch(err){
+    showToast("Export failed: " + err.message);
+  }finally{
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+};
 
 document.getElementById("checkOutOfRangeBtn").onclick = () => {
   const btn = document.getElementById("checkOutOfRangeBtn");
