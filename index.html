@@ -1006,6 +1006,49 @@ async function loadVenueHistory(){
   return venueHistory;
 }
 
+async function queryPhoton(q, useBias){
+  const bias = useBias ? `&lat=47.2529&lon=-122.4443` : "";
+  const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=6${bias}`;
+  const res = await fetch(url);
+  if(!res.ok) return [];
+  const data = await res.json();
+  return (data.features || []).map(f=>{
+    const p = f.properties || {};
+    const locality = [p.city || p.county, p.state].filter(Boolean).join(", ");
+    return {label: p.name || p.street || "", sub: locality};
+  }).filter(p => p.label);
+}
+
+async function queryNominatim(q){
+  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(q)}&limit=6&viewbox=-122.62,47.34,-122.34,47.14&bounded=0`;
+  const res = await fetch(url);
+  if(!res.ok) return [];
+  const data = await res.json();
+  return (data || []).map(r => ({
+    label: (r.display_name || "").split(",")[0].trim(),
+    sub: (r.display_name || "").split(",").slice(1, 3).join(",").trim()
+  })).filter(p => p.label);
+}
+
+async function searchPlaces(query){
+  const q = query.trim();
+  let results = [];
+  try{ results = await queryPhoton(q, true); }catch(e){}
+  if(results.length === 0){
+    try{ results = await queryPhoton(q, false); }catch(e){}
+  }
+  // If a multi-word query with a leading word (e.g. an informal nickname like "Jim's")
+  // comes up empty, retry against just the trailing words.
+  const words = q.split(/\s+/);
+  if(results.length === 0 && words.length > 1){
+    try{ results = await queryPhoton(words.slice(1).join(" "), false); }catch(e){}
+  }
+  if(results.length === 0){
+    try{ results = await queryNominatim(q); }catch(e){}
+  }
+  return results;
+}
+
 async function searchVenues(query){
   const q = query.trim().toLowerCase();
   const history = await loadVenueHistory();
@@ -1014,18 +1057,18 @@ async function searchVenues(query){
   let places = [];
   if(query.trim().length >= 3){
     try{
-      const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query.trim())}&limit=5&lat=47.2529&lon=-122.4443`;
-      const res = await fetch(url);
-      if(res.ok){
-        const data = await res.json();
-        places = (data.features || []).map(f=>{
-          const p = f.properties || {};
-          const locality = [p.city || p.county, p.state].filter(Boolean).join(", ");
-          return {label: p.name || p.street || "", sub: locality};
-        }).filter(p => p.label && !previous.some(v=>v.toLowerCase()===p.label.toLowerCase()));
-      }
+      const raw = await searchPlaces(query);
+      places = raw.filter(p => !previous.some(v=>v.toLowerCase()===p.label.toLowerCase()));
+      // De-dupe by label since Nominatim can return near-duplicate rows
+      const seen = new Set();
+      places = places.filter(p=>{
+        const key = p.label.toLowerCase();
+        if(seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).slice(0, 5);
     }catch(e){
-      // No network access or Photon unreachable — fall back to previous-venue matches only
+      // No network access or providers unreachable — fall back to previous-venue matches only
     }
   }
   return {previous, places};
