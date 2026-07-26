@@ -524,6 +524,8 @@
     <label>DATA HEALTH</label>
     <button class="check-missing-btn" id="checkMissingBtn">Check for missing range data</button>
     <div id="missingResults"></div>
+    <button class="check-missing-btn" id="checkOutOfRangeBtn" style="margin-top:10px;">Check for out-of-range songs</button>
+    <div id="outOfRangeResults"></div>
   </div>
   <div class="sheet-actions">
     <button class="btn-cancel" id="btnSettingsClose" style="flex:1;">Done</button>
@@ -1543,6 +1545,42 @@ function closeSettings(){
 }
 document.getElementById("btnSettingsClose").onclick = closeSettings;
 settingsBackdrop.onclick = closeSettings;
+
+document.getElementById("checkOutOfRangeBtn").onclick = () => {
+  const btn = document.getElementById("checkOutOfRangeBtn");
+  const resultsEl = document.getElementById("outOfRangeResults");
+
+  const outOfRange = songs
+    .map(s=>{
+      const lowS = noteToSemitone(s.low_note), highS = noteToSemitone(s.high_note);
+      return {...s, fit: fitLabel(lowS, highS), lowS, highS};
+    })
+    .filter(s => s.fit.cls === "fit-out")
+    .sort((a,b) => (a.artist||"").localeCompare(b.artist||""));
+
+  if(outOfRange.length === 0){
+    resultsEl.innerHTML = `<div class="missing-none">✓ No songs are out of range</div>`;
+    return;
+  }
+
+  resultsEl.innerHTML = `
+    <div class="missing-summary">${outOfRange.length} song${outOfRange.length===1?"":"s"} out of range:</div>
+    ${outOfRange.map(s => `
+      <div class="missing-item" data-id="${s.id}">
+        <div class="mi-title">${escapeHtml(s.title)}</div>
+        <div class="mi-artist">${escapeHtml(s.artist)} · ${escapeHtml(s.low_note)}–${escapeHtml(s.high_note)}</div>
+        <div class="rec-transpose">${escapeHtml(transpositionMessage(s.lowS, s.highS))}</div>
+      </div>
+    `).join("")}
+    <div class="missing-hint">Tap a song to edit it, transpose your key notes, or change its status.</div>
+  `;
+  resultsEl.querySelectorAll(".missing-item").forEach(el => {
+    el.onclick = () => {
+      closeSettings();
+      openEdit(el.dataset.id);
+    };
+  });
+};
 
 document.getElementById("checkMissingBtn").onclick = async () => {
   const btn = document.getElementById("checkMissingBtn");
