@@ -66,10 +66,12 @@
   html,body{margin:0;padding:0;background:var(--bg);color:var(--cream);font-family:'Inter',sans-serif;-webkit-tap-highlight-color:transparent;}
   body{padding-bottom:88px;}
 
+  .top-bar{
+    position:sticky; top:0; background:var(--bg); z-index:20;
+    box-shadow:0 6px 10px -6px rgba(0,0,0,0.35);
+  }
   .marquee{
     padding:22px 18px 14px;
-    border-bottom:1px solid var(--line);
-    position:sticky; top:0; background:var(--bg); z-index:20;
   }
   .marquee h1{
     font-family:'Bebas Neue',sans-serif;
@@ -116,7 +118,7 @@
   }
   .chip.active{border-color:var(--gold); color:var(--gold); background:rgba(232,183,78,0.08);}
 
-  .count-row{padding:10px 18px 2px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cream-dim);}
+  .count-row{padding:10px 18px 10px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cream-dim); border-bottom:1px solid var(--line);}
 
   .list{padding:8px 14px 20px; display:flex; flex-direction:column; gap:10px;}
   .card{
@@ -272,27 +274,29 @@
 </head>
 <body>
 
-<div class="marquee">
-  <div class="marquee-top">
-    <h1>SONGBOOK</h1>
-    <button class="gear-btn" id="settingsBtn" aria-label="Settings">⚙</button>
+<div class="top-bar">
+  <div class="marquee">
+    <div class="marquee-top">
+      <h1>SONGBOOK</h1>
+      <button class="gear-btn" id="settingsBtn" aria-label="Settings">⚙</button>
+    </div>
+    <div class="sub" id="rangeLine">YOUR RANGE — LOADING…</div>
   </div>
-  <div class="sub" id="rangeLine">YOUR RANGE — LOADING…</div>
-</div>
 
-<div class="controls">
-  <div class="search-row">
-    <input type="text" id="search" placeholder="Search title or artist…">
-    <select id="sortSelect" class="sort-select">
-      <option value="fit">Best fit</option>
-      <option value="title">Title</option>
-      <option value="lastPlayed">Last played</option>
-    </select>
+  <div class="controls">
+    <div class="search-row">
+      <input type="text" id="search" placeholder="Search title or artist…">
+      <select id="sortSelect" class="sort-select">
+        <option value="fit">Best fit</option>
+        <option value="title">Title</option>
+        <option value="lastPlayed">Last played</option>
+      </select>
+    </div>
+    <div class="filter-chips" id="chips"></div>
   </div>
-  <div class="filter-chips" id="chips"></div>
-</div>
 
-<div class="count-row" id="countRow"></div>
+  <div class="count-row" id="countRow"></div>
+</div>
 <div class="list" id="list"><div class="loading">Loading songbook…</div></div>
 
 <button class="fab" id="fabAdd">+</button>
