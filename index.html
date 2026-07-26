@@ -380,6 +380,7 @@
         <option value="fit">Best fit</option>
         <option value="title">Title</option>
         <option value="lastPlayed">Last played</option>
+        <option value="lastAdded">Last added</option>
       </select>
     </div>
     <div class="filter-chips" id="chips"></div>
@@ -762,6 +763,10 @@ function render(){
       if(!a.last_played) return 1;
       if(!b.last_played) return -1;
       return b.last_played.localeCompare(a.last_played);
+    }
+    if(sortMode === "lastAdded"){
+      // Most recently added to the songbook first.
+      return (b.created_at||"").localeCompare(a.created_at||"");
     }
     // fit: best range match first, tie-broken by title
     if(a.fit_score !== b.fit_score) return a.fit_score - b.fit_score;
