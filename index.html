@@ -228,7 +228,7 @@
     font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--cream-dim); padding:2px 0 4px;
   }
   .log-history-list{display:flex; flex-direction:column; gap:8px; max-height:220px; overflow-y:auto; margin-bottom:2px;}
-  .log-history-item{background:var(--bg-raised); border:1px solid var(--line); border-radius:10px; padding:10px 12px;}
+  .log-history-item{background:var(--bg-raised); border:1px solid var(--line); border-radius:10px; padding:10px 12px; cursor:pointer;}
   .log-history-top{display:flex; justify-content:space-between; align-items:baseline; gap:8px;}
   .log-history-date{font-weight:700; font-size:13px;}
   .log-history-crowd{font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--cream-dim); flex:none;}
@@ -395,47 +395,54 @@
 
 <div class="sheet-backdrop" id="logBackdrop"></div>
 <div class="sheet" id="logSheet">
-  <h2 id="logSheetTitle">Log performance</h2>
+  <h2 id="logSheetTitle">Performances</h2>
   <div id="logSongLabel" class="artist" style="margin-bottom:12px;"></div>
   <input type="hidden" id="logSongId">
   <input type="hidden" id="logEntryId">
 
-  <div class="log-history" id="logHistory"></div>
-
-  <div class="log-editing-banner" id="logEditingBanner" style="display:none;">
-    <span id="logEditingText">Editing entry</span>
-    <button type="button" id="btnCancelEditEntry">Cancel edit</button>
-  </div>
-
-  <div class="field">
-    <label>DATE</label>
-    <input type="date" id="lDate">
-  </div>
-  <div class="field autocomplete-field">
-    <label>VENUE</label>
-    <input type="text" id="lVenue" placeholder="e.g. The Swiss" autocomplete="off">
-    <div class="autocomplete-list" id="venueSuggestions"></div>
-    <div class="venue-directions-row" id="venueDirectionsRow" style="display:none;">
-      <a class="directions-link" id="venueDirectionsLink" href="#" target="_blank" rel="noopener">Directions ↗</a>
+  <div id="logListView">
+    <div class="log-history" id="logHistory"></div>
+    <div class="sheet-actions">
+      <button class="btn-cancel" id="btnLogListClose">Close</button>
+      <button class="btn-save" id="btnAddPerformance">+ Add performance</button>
     </div>
   </div>
-  <div class="field">
-    <label>CROWD RESPONSE</label>
-    <select id="lCrowd">
-      <option value="">—</option>
-      <option>Killed it</option>
-      <option>Solid</option>
-      <option>Mixed</option>
-      <option>Rough</option>
-    </select>
-  </div>
-  <div class="field">
-    <label>NOTES</label>
-    <input type="text" id="lNotes" placeholder="Anything worth remembering…">
-  </div>
-  <div class="sheet-actions">
-    <button class="btn-cancel" id="btnLogCancel">Cancel</button>
-    <button class="btn-save" id="btnLogSave">Save</button>
+
+  <div id="logFormView" style="display:none;">
+    <div class="log-editing-banner" id="logEditingBanner" style="display:none;">
+      <span id="logEditingText">Editing entry</span>
+    </div>
+
+    <div class="field">
+      <label>DATE</label>
+      <input type="date" id="lDate">
+    </div>
+    <div class="field autocomplete-field">
+      <label>VENUE</label>
+      <input type="text" id="lVenue" placeholder="e.g. The Swiss" autocomplete="off">
+      <div class="autocomplete-list" id="venueSuggestions"></div>
+      <div class="venue-directions-row" id="venueDirectionsRow" style="display:none;">
+        <a class="directions-link" id="venueDirectionsLink" href="#" target="_blank" rel="noopener">Directions ↗</a>
+      </div>
+    </div>
+    <div class="field">
+      <label>CROWD RESPONSE</label>
+      <select id="lCrowd">
+        <option value="">—</option>
+        <option>Killed it</option>
+        <option>Solid</option>
+        <option>Mixed</option>
+        <option>Rough</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>NOTES</label>
+      <input type="text" id="lNotes" placeholder="Anything worth remembering…">
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-cancel" id="btnLogCancel">Cancel</button>
+      <button class="btn-save" id="btnLogSave">Save</button>
+    </div>
   </div>
 </div>
 
@@ -699,7 +706,7 @@ function render(){
         ♪ Find on Spotify
       </a>
       <div class="card-actions">
-        <button class="logBtn primary" data-id="${s.id}">Log</button>
+        <button class="logBtn primary" data-id="${s.id}">Performances</button>
         <button class="editBtn" data-id="${s.id}">Edit</button>
         <button class="delBtn danger" data-id="${s.id}">Delete</button>
       </div>
@@ -845,9 +852,11 @@ async function deleteSong(id, opts={}){
   }
 }
 
-// --- Log performance sheet ---
+// --- Performances sheet: list view (history) + form view (add/edit) ---
 const logSheet = document.getElementById("logSheet");
 const logBackdrop = document.getElementById("logBackdrop");
+const logListView = document.getElementById("logListView");
+const logFormView = document.getElementById("logFormView");
 let currentLogEntries = [];
 
 async function fetchPerformances(songId){
@@ -871,64 +880,67 @@ function renderLogHistory(entries){
     <div class="log-history-title">Past performances (${entries.length})</div>
     <div class="log-history-list">
       ${entries.map(e => `
-        <div class="log-history-item" data-id="${e.id}">
+        <div class="log-history-item logHistoryItem" data-id="${e.id}">
           <div class="log-history-top">
             <div class="log-history-date">${formatDate(e.performance_date)}</div>
             ${e.crowd_response ? `<div class="log-history-crowd">${escapeHtml(e.crowd_response)}</div>` : ""}
           </div>
-          ${e.venue ? `<div class="log-history-venue">${escapeHtml(e.venue)} <a class="directions-link" href="${mapsDirectionsUrl(e.venue)}" target="_blank" rel="noopener">Directions ↗</a></div>` : ""}
+          ${e.venue ? `<div class="log-history-venue">${escapeHtml(e.venue)} <a class="directions-link" href="${mapsDirectionsUrl(e.venue)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Directions ↗</a></div>` : ""}
           ${e.notes ? `<div class="log-history-notes">${escapeHtml(e.notes)}</div>` : ""}
           <div class="log-history-actions">
-            <button class="logEditBtn" data-id="${e.id}">Edit</button>
             <button class="logDelBtn danger" data-id="${e.id}">Delete</button>
           </div>
         </div>
       `).join("")}
     </div>
   `;
-  el.querySelectorAll(".logEditBtn").forEach(b=>{
-    b.onclick = () => {
-      const entry = currentLogEntries.find(x=>String(x.id)===b.dataset.id);
-      if(entry) startEditPerformance(entry);
+  el.querySelectorAll(".logHistoryItem").forEach(item=>{
+    item.onclick = (ev) => {
+      if(ev.target.closest(".logDelBtn")) return;
+      const entry = currentLogEntries.find(x=>String(x.id)===item.dataset.id);
+      if(entry) showFormView(entry);
     };
   });
   el.querySelectorAll(".logDelBtn").forEach(b=>{
-    b.onclick = () => deletePerformance(b.dataset.id);
+    b.onclick = (ev) => { ev.stopPropagation(); deletePerformance(b.dataset.id); };
   });
 }
 
-function startEditPerformance(entry){
-  document.getElementById("logEntryId").value = entry.id;
-  document.getElementById("lDate").value = entry.performance_date;
-  document.getElementById("lVenue").value = entry.venue || "";
-  document.getElementById("lCrowd").value = entry.crowd_response || "";
-  document.getElementById("lNotes").value = entry.notes || "";
-  document.getElementById("logSheetTitle").textContent = "Edit performance";
-  document.getElementById("btnLogSave").textContent = "Update";
-  document.getElementById("logEditingText").textContent = `Editing ${formatDate(entry.performance_date)} entry`;
-  document.getElementById("logEditingBanner").style.display = "flex";
-  updateVenueDirectionsLink();
+function showListView(){
+  logFormView.style.display = "none";
+  logListView.style.display = "block";
+  document.getElementById("logSheetTitle").textContent = "Performances";
 }
 
-function resetLogForm(){
-  document.getElementById("logEntryId").value = "";
-  document.getElementById("lDate").value = new Date().toISOString().slice(0,10);
-  document.getElementById("lVenue").value = "";
-  document.getElementById("lCrowd").value = "";
-  document.getElementById("lNotes").value = "";
-  document.getElementById("logSheetTitle").textContent = "Log performance";
-  document.getElementById("btnLogSave").textContent = "Save";
-  document.getElementById("logEditingBanner").style.display = "none";
+function showFormView(entry){
+  document.getElementById("logEntryId").value = entry ? entry.id : "";
+  document.getElementById("lDate").value = entry ? entry.performance_date : new Date().toISOString().slice(0,10);
+  document.getElementById("lVenue").value = entry ? (entry.venue || "") : "";
+  document.getElementById("lCrowd").value = entry ? (entry.crowd_response || "") : "";
+  document.getElementById("lNotes").value = entry ? (entry.notes || "") : "";
+  document.getElementById("logSheetTitle").textContent = entry ? "Edit performance" : "Log performance";
+  document.getElementById("btnLogSave").textContent = entry ? "Update" : "Save";
+  const banner = document.getElementById("logEditingBanner");
+  if(entry){
+    document.getElementById("logEditingText").textContent = `Editing ${formatDate(entry.performance_date)} entry`;
+    banner.style.display = "flex";
+  }else{
+    banner.style.display = "none";
+  }
   updateVenueDirectionsLink();
+  logListView.style.display = "none";
+  logFormView.style.display = "block";
 }
-document.getElementById("btnCancelEditEntry").onclick = resetLogForm;
+
+document.getElementById("btnAddPerformance").onclick = () => showFormView(null);
+document.getElementById("btnLogCancel").onclick = showListView;
 
 async function openLog(id){
   const s = songs.find(x=>x.id===id);
   if(!s) return;
   document.getElementById("logSongId").value = id;
   document.getElementById("logSongLabel").textContent = `${s.title} — ${s.artist}`;
-  resetLogForm();
+  showListView();
   document.getElementById("logHistory").innerHTML = `<div class="log-history-title">Past performances</div><div class="log-history-empty">Loading…</div>`;
   logBackdrop.classList.add("open");
   logSheet.classList.add("open");
@@ -938,7 +950,7 @@ function closeLog(){
   logBackdrop.classList.remove("open");
   logSheet.classList.remove("open");
 }
-document.getElementById("btnLogCancel").onclick = closeLog;
+document.getElementById("btnLogListClose").onclick = closeLog;
 logBackdrop.onclick = closeLog;
 
 async function deletePerformance(entryId){
@@ -947,7 +959,6 @@ async function deletePerformance(entryId){
     const res = await fetch(`${SUPABASE_URL}/rest/v1/performances?id=eq.${entryId}`, {method:"DELETE", headers: HEADERS});
     if(!res.ok) throw new Error("Delete failed");
     showToast("Entry deleted");
-    if(document.getElementById("logEntryId").value === String(entryId)) resetLogForm();
     const songId = document.getElementById("logSongId").value;
     renderLogHistory(await fetchPerformances(songId));
     venueHistory = null; // invalidate venue cache since a venue entry changed
@@ -987,8 +998,7 @@ document.getElementById("btnLogSave").onclick = async ()=>{
       showToast("Performance logged");
     }
     venueHistory = null; // invalidate venue cache since a venue entry changed
-    renderLogHistory(await fetchPerformances(songId));
-    resetLogForm();
+    closeLog();
     fetchSongs();
   }catch(err){
     showToast("Error: " + err.message);
