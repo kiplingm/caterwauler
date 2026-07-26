@@ -342,6 +342,21 @@
     font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--cream-dim);
     margin-top:8px; line-height:1.5;
   }
+  .ask-claude-btn{
+    width:100%; margin-top:10px; padding:11px 0; border-radius:10px; border:1px solid var(--teal);
+    background:transparent; color:var(--teal); font-family:'Inter',sans-serif; font-size:13.5px; font-weight:700;
+  }
+  .ask-claude-label{
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--cream-dim); margin-top:12px; margin-bottom:6px;
+  }
+  .ask-claude-textarea{
+    width:100%; min-height:110px; background:var(--bg); border:1px solid var(--line); border-radius:10px;
+    padding:10px; color:var(--cream); font-family:'IBM Plex Mono',monospace; font-size:11.5px; resize:vertical;
+  }
+  .ask-claude-copy-btn{
+    width:100%; margin-top:8px; padding:9px 0; border-radius:9px; border:1px solid var(--line);
+    background:transparent; color:var(--cream-dim); font-family:'Inter',sans-serif; font-size:12.5px; font-weight:600;
+  }
 </style>
 </head>
 <body>
@@ -577,6 +592,41 @@ function showToast(msg){
   t.textContent = msg;
   t.classList.add("show");
   setTimeout(()=>t.classList.remove("show"), 1800);
+}
+
+function buildRangePrompt(missingSongs){
+  const list = missingSongs.map(s => `- ${s.title} — ${s.artist}`).join("\n");
+  return `Please research the vocal range (low and high note, e.g. "A2") for these songs from my karaoke tracker, then update them in my Supabase project (karaoke-prod, ref luykkuptcizkdigwness), table "songs", columns low_note/high_note, matched by title + artist:\n\n${list}\n\nFor context: my comfort range is A2–B4 and my full stretch range is G2–D5.`;
+}
+
+async function askClaude(promptText, boxEl){
+  let copied = false;
+  try{
+    await navigator.clipboard.writeText(promptText);
+    copied = true;
+  }catch(e){ /* clipboard permission unavailable — fall back to manual copy below */ }
+
+  if(boxEl){
+    boxEl.style.display = "block";
+    boxEl.innerHTML = `
+      <div class="ask-claude-label">${copied ? "Copied — paste it into the chat that opens." : "Copy this, then paste it into the chat that opens:"}</div>
+      <textarea class="ask-claude-textarea" id="askClaudeTextarea" readonly></textarea>
+      ${copied ? "" : `<button class="ask-claude-copy-btn" id="askClaudeCopyBtn">Copy</button>`}
+    `;
+    document.getElementById("askClaudeTextarea").value = promptText;
+    const copyBtn = document.getElementById("askClaudeCopyBtn");
+    if(copyBtn){
+      copyBtn.onclick = () => {
+        const ta = document.getElementById("askClaudeTextarea");
+        ta.select();
+        try{ document.execCommand("copy"); showToast("Copied"); }catch(e){ showToast("Select the text above and copy it manually"); }
+      };
+    }
+  }
+  showToast(copied ? "Prompt copied — opening Claude…" : "Opening Claude — copy the prompt below first");
+  // claude.ai/new no longer accepts a prefill query parameter (removed for security reasons),
+  // so we open a fresh chat and rely on the clipboard copy / visible textarea above.
+  window.open("https://claude.ai/new", "_blank");
 }
 
 async function fetchSongs(){
@@ -1490,7 +1540,9 @@ document.getElementById("checkMissingBtn").onclick = async () => {
             <div class="mi-artist">${escapeHtml(s.artist)}</div>
           </div>
         `).join("")}
-        <div class="missing-hint">Tap a song to edit it directly, or ask Claude to "check missing ranges" in chat and it'll research and fill these in.</div>
+        <div class="missing-hint">Tap a song to edit it directly, or use the button below to hand this list to Claude in chat.</div>
+        <button class="ask-claude-btn" id="askClaudeMissingBtn">Ask Claude to fill these in</button>
+        <div id="askClaudeBox" style="display:none;"></div>
       `;
       resultsEl.querySelectorAll(".missing-item").forEach(el => {
         el.onclick = () => {
@@ -1498,6 +1550,10 @@ document.getElementById("checkMissingBtn").onclick = async () => {
           openEdit(el.dataset.id);
         };
       });
+      document.getElementById("askClaudeMissingBtn").onclick = () => {
+        const prompt = buildRangePrompt(missing);
+        askClaude(prompt, document.getElementById("askClaudeBox"));
+      };
     }
   }catch(err){
     resultsEl.innerHTML = `<div class="missing-summary">Error checking: ${err.message}</div>`;
