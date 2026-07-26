@@ -282,6 +282,13 @@
     padding:24px 4px; text-align:center; line-height:1.5;
   }
   .rec-fit-badge{font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.3px; font-weight:700;}
+  .rec-transpose{
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--gold); margin-top:5px; line-height:1.4;
+  }
+  .rec-section-label{
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:0.5px; color:var(--cream-dim);
+    text-transform:uppercase; margin:14px 0 8px; padding-top:10px; border-top:1px solid var(--line);
+  }
   .rec-unconfirmed-note{
     font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cream-dim);
     padding:12px 2px 4px; line-height:1.5; border-top:1px solid var(--line); margin-top:6px;
@@ -1399,35 +1406,42 @@ async function openRecommendations(){
     // Gate every candidate on vocal range before it's shown for consideration.
     const rangeMap = await fetchSongRanges();
     const fitResults = [];
+    const stretchResults = [];
     let unconfirmedCount = 0;
     candidates.forEach(c=>{
       const rangeRow = rangeMap.get(`${normalizeForMatch(c.title)}|${normalizeForMatch(c.artist)}`);
       if(!rangeRow){ unconfirmedCount++; return; }
-      const fit = fitLabel(noteToSemitone(rangeRow.low_note), noteToSemitone(rangeRow.high_note));
+      const lowS = noteToSemitone(rangeRow.low_note), highS = noteToSemitone(rangeRow.high_note);
+      const fit = fitLabel(lowS, highS);
+      const enriched = {...c, low_note: rangeRow.low_note, high_note: rangeRow.high_note, fit};
       if(fit.cls === "fit-easy" || fit.cls === "fit-stretch"){
-        fitResults.push({...c, low_note: rangeRow.low_note, high_note: rangeRow.high_note, fit});
+        fitResults.push(enriched);
+      }else if(fit.cls === "fit-out"){
+        enriched.transposeMsg = transpositionMessage(lowS, highS);
+        stretchResults.push(enriched);
       }
-      // fit-out and fit-unknown are excluded from consideration entirely.
+      // fit-unknown (no range data) is the only case excluded from consideration.
     });
     fitResults.sort((a,b)=> (a.fit.cls === b.fit.cls) ? 0 : (a.fit.cls === "fit-easy" ? -1 : 1));
 
-    renderRecommendations(fitResults, unconfirmedCount);
+    renderRecommendations(fitResults, stretchResults, unconfirmedCount);
   }catch(err){
     listEl.innerHTML = `<div class="rec-empty">Couldn't load recommendations: ${err.message}</div>`;
   }
 }
 
-function renderRecommendations(results, unconfirmedCount){
+function renderRecommendations(results, outOfRangeResults, unconfirmedCount){
   const listEl = document.getElementById("recList");
   const unconfirmedNote = unconfirmedCount > 0
     ? `<div class="rec-unconfirmed-note">${unconfirmedCount} more song${unconfirmedCount===1?"":"s"} matched by artist but ${unconfirmedCount===1?"hasn't":"haven't"} had its vocal range checked yet, so ${unconfirmedCount===1?"it's":"they're"} left out of consideration. Ask Claude in chat to research ranges for your Solid artists to expand this list.</div>`
     : "";
 
-  if(results.length === 0){
+  if(results.length === 0 && outOfRangeResults.length === 0){
     listEl.innerHTML = `<div class="rec-empty">No range-confirmed matches right now.</div>${unconfirmedNote}`;
     return;
   }
-  listEl.innerHTML = results.map((r, i) => `
+
+  const renderItem = (r, i, group) => `
     <div class="rec-item">
       <div class="rec-item-info">
         <div class="rec-item-title">${escapeHtml(r.title)}</div>
@@ -1436,16 +1450,26 @@ function renderRecommendations(results, unconfirmedCount){
           Because you're solid on ${escapeHtml(r.sourceArtist)} ·
           <span class="rec-fit-badge ${r.fit.cls}">${r.fit.text}</span>
         </div>
+        ${r.transposeMsg ? `<div class="rec-transpose">${escapeHtml(r.transposeMsg)}</div>` : ""}
       </div>
       <div class="rec-item-actions">
-        <button class="rec-add-btn" data-idx="${i}">+ Learning</button>
-        <button class="rec-dismiss-btn" data-idx="${i}">Dismiss</button>
+        <button class="rec-add-btn" data-group="${group}" data-idx="${i}">+ Learning</button>
+        <button class="rec-dismiss-btn" data-group="${group}" data-idx="${i}">Dismiss</button>
       </div>
     </div>
-  `).join("") + unconfirmedNote;
+  `;
+
+  let html = results.map((r, i) => renderItem(r, i, "fit")).join("");
+  if(outOfRangeResults.length > 0){
+    html += `<div class="rec-section-label">Would need a key change</div>`;
+    html += outOfRangeResults.map((r, i) => renderItem(r, i, "out")).join("");
+  }
+  html += unconfirmedNote;
+  listEl.innerHTML = html;
 
   listEl.querySelectorAll(".rec-add-btn").forEach(b=>{
-    b.onclick = () => addRecommendation(results[b.dataset.idx], b.closest(".rec-item"));
+    const source = b.dataset.group === "fit" ? results : outOfRangeResults;
+    b.onclick = () => addRecommendation(source[b.dataset.idx], b.closest(".rec-item"));
   });
   listEl.querySelectorAll(".rec-dismiss-btn").forEach(b=>{
     b.onclick = () => b.closest(".rec-item").remove();
