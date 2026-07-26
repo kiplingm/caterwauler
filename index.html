@@ -157,6 +157,12 @@
 
   .card-meta{display:flex; gap:14px; margin-top:10px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cream-dim);}
   .card-actions{display:flex; gap:8px; margin-top:12px;}
+  .spotify-link{
+    display:flex; align-items:center; justify-content:center; gap:6px;
+    width:100%; margin-top:12px; padding:9px 0; border-radius:9px;
+    border:1px solid var(--green); color:var(--green); text-decoration:none;
+    font-family:'Inter',sans-serif; font-size:12.5px; font-weight:600;
+  }
   .card-actions button{
     flex:1; font-family:'Inter',sans-serif; font-size:12.5px; font-weight:600;
     padding:8px 0; border-radius:8px; border:1px solid var(--line); background:transparent; color:var(--cream-dim);
@@ -631,6 +637,9 @@ function render(){
         ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : ""}
         ${s.key_notes ? `<span>${escapeHtml(s.key_notes)}</span>` : ""}
       </div>
+      <a class="spotify-link" href="https://open.spotify.com/search/${encodeURIComponent(s.title + ' ' + s.artist)}" target="_blank" rel="noopener">
+        ♪ Find on Spotify
+      </a>
       <div class="card-actions">
         <button class="logBtn primary" data-id="${s.id}">Log</button>
         <button class="editBtn" data-id="${s.id}">Edit</button>
