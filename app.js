@@ -1444,7 +1444,7 @@ document.getElementById("exportDataBtn").onclick = async () => {
 
     const exportPayload = {
       exported_at: new Date().toISOString(),
-      source: "kiplingm/karaoke-tracker",
+      source: "kiplingm/setlist-sherpa",
       songs: songsData,
       performances: perfData,
       song_ranges: rangesData

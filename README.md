@@ -1,6 +1,5 @@
-# RokeMaybe
-Live, multi-user karaoke songbook synced to Supabase. (Repo is still named
-`karaoke-tracker` so the existing GitHub Pages URL keeps working.)
+# Setlist Sherpa
+Live, multi-user karaoke songbook synced to Supabase.
 
 This is the one and only app in active use — an earlier separate project
 (`karaoke-app`, a React rebuild on Vercel) was retired in favor of adding
