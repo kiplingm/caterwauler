@@ -2,15 +2,16 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "3";
-const BUILD_DATE = "2026-07-27";
+const BUILD_VERSION = "4";
+const BUILD_DATE = "2026-07-27T13:05:19-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
 if(buildInfoEl){
-  const formattedDate = new Date(BUILD_DATE + "T00:00:00").toLocaleDateString(undefined, {
-    year: "numeric", month: "long", day: "numeric"
+  const formatted = new Date(BUILD_DATE).toLocaleString(undefined, {
+    year: "numeric", month: "long", day: "numeric",
+    hour: "numeric", minute: "2-digit"
   });
-  buildInfoEl.textContent = `Build ${BUILD_VERSION} — ${formattedDate}`;
+  buildInfoEl.textContent = `Build ${BUILD_VERSION} — ${formatted}`;
 }
 
 const SUPABASE_URL = "https://luykkuptcizkdigwness.supabase.co";
@@ -1060,10 +1061,10 @@ async function openRecommendations(){
     const rangeMap = await fetchSongRanges();
     const fitResults = [];
     const stretchResults = [];
-    let unconfirmedCount = 0;
+    const unconfirmedSongs = [];
     candidates.forEach(c=>{
       const rangeRow = rangeMap.get(`${normalizeForMatch(c.title)}|${normalizeForMatch(c.artist)}`);
-      if(!rangeRow){ unconfirmedCount++; return; }
+      if(!rangeRow){ unconfirmedSongs.push({title: c.title, artist: c.artist}); return; }
       const lowS = noteToSemitone(rangeRow.low_note), highS = noteToSemitone(rangeRow.high_note);
       const fit = fitLabel(lowS, highS);
       const enriched = {...c, low_note: rangeRow.low_note, high_note: rangeRow.high_note, fit};
@@ -1077,20 +1078,25 @@ async function openRecommendations(){
     });
     fitResults.sort((a,b)=> (a.fit.cls === b.fit.cls) ? 0 : (a.fit.cls === "fit-easy" ? -1 : 1));
 
-    renderRecommendations(fitResults, stretchResults, unconfirmedCount);
+    renderRecommendations(fitResults, stretchResults, unconfirmedSongs);
   }catch(err){
     listEl.innerHTML = `<div class="rec-empty">Couldn't load recommendations: ${err.message}</div>`;
   }
 }
 
-function renderRecommendations(results, outOfRangeResults, unconfirmedCount){
+function renderRecommendations(results, outOfRangeResults, unconfirmedSongs){
   const listEl = document.getElementById("recList");
-  const unconfirmedNote = unconfirmedCount > 0
-    ? `<div class="rec-unconfirmed-note">${unconfirmedCount} more song${unconfirmedCount===1?"":"s"} matched by artist but ${unconfirmedCount===1?"hasn't":"haven't"} had its vocal range checked yet, so ${unconfirmedCount===1?"it's":"they're"} left out of consideration. Ask Claude in chat to research ranges for your Solid artists to expand this list.</div>`
+  const unconfirmedNote = unconfirmedSongs.length > 0
+    ? `<div class="rec-unconfirmed-note">
+        ${unconfirmedSongs.length} more song${unconfirmedSongs.length===1?"":"s"} matched by artist but ${unconfirmedSongs.length===1?"hasn't":"haven't"} had its vocal range checked yet, so ${unconfirmedSongs.length===1?"it's":"they're"} left out of consideration.
+        <button class="ask-claude-btn" id="askClaudeRecBtn">Ask Claude to research these ranges</button>
+        <div id="askClaudeRecBox" style="display:none;"></div>
+      </div>`
     : "";
 
   if(results.length === 0 && outOfRangeResults.length === 0){
     listEl.innerHTML = `<div class="rec-empty">No range-confirmed matches right now.</div>${unconfirmedNote}`;
+    wireAskClaudeRecBtn(unconfirmedSongs);
     return;
   }
 
@@ -1127,6 +1133,30 @@ function renderRecommendations(results, outOfRangeResults, unconfirmedCount){
   listEl.querySelectorAll(".rec-dismiss-btn").forEach(b=>{
     b.onclick = () => animateRemove(b.closest(".rec-item"));
   });
+  wireAskClaudeRecBtn(unconfirmedSongs);
+}
+
+function wireAskClaudeRecBtn(unconfirmedSongs){
+  const btn = document.getElementById("askClaudeRecBtn");
+  if(!btn) return;
+  btn.onclick = () => {
+    const prompt = buildRecommendationRangePrompt(unconfirmedSongs);
+    askClaude(prompt, document.getElementById("askClaudeRecBox"));
+  };
+}
+
+// Unlike buildRangePrompt (which updates the user's own songs by row id),
+// these are catalog candidates not yet in the songbook — so this asks
+// Claude to add/update rows in the shared song_ranges table instead,
+// matched by title+artist since there's no existing row id to reference.
+function buildRecommendationRangePrompt(unconfirmedSongs){
+  const CAP = 40;
+  const capped = unconfirmedSongs.slice(0, CAP);
+  const list = capped.map(s => `- "${s.title}" by ${s.artist}`).join("\n");
+  const overflowNote = unconfirmedSongs.length > capped.length
+    ? `\n\n(${unconfirmedSongs.length - capped.length} more were left off to keep this list manageable — ask again for the rest if useful.)`
+    : "";
+  return `Please research the vocal range (low and high note, e.g. "A2") for these songs, then add or update them in my Supabase project (karaoke-prod, ref luykkuptcizkdigwness), table "song_ranges" (shared reference data, not my personal songbook) — columns low_note/high_note, matched by title + artist (insert a new row if one doesn't already exist for that title_normalized/artist_normalized pair):\n\n${list}${overflowNote}\n\nThese are recommendation candidates — artists I'm already Solid on, songs I haven't added to my own songbook yet — so I can see whether they're actually in my range before deciding whether to learn them.`;
 }
 
 async function addRecommendation(rec, itemEl){
