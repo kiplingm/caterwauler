@@ -41,7 +41,11 @@
 
   <div class="count-row" id="countRow"></div>
 </div>
-<div class="list" id="list"><div class="loading">Loading songbook…</div></div>
+<div class="list" id="list">
+  <div class="skeleton-card"></div>
+  <div class="skeleton-card"></div>
+  <div class="skeleton-card"></div>
+</div>
 
 <button class="fab" id="fabAdd">+</button>
 
@@ -162,10 +166,14 @@
 <div class="sheet-backdrop" id="settingsBackdrop"></div>
 <div class="sheet" id="settingsSheet">
   <h2>Settings</h2>
+
+  <div class="settings-section-label">Appearance</div>
   <div class="field">
     <label>COLOR SCHEME</label>
     <div class="theme-grid" id="themeGrid"></div>
   </div>
+
+  <div class="settings-section-label">Data</div>
   <div class="field">
     <label>DATA HEALTH</label>
     <button class="check-missing-btn" id="checkMissingBtn">Check for missing range data</button>
@@ -177,6 +185,7 @@
     <label>BACKUP</label>
     <button class="check-missing-btn" id="exportDataBtn">Export my data (JSON)</button>
   </div>
+
   <div class="sheet-actions">
     <button class="btn-cancel" id="btnSettingsClose" style="flex:1;">Done</button>
   </div>

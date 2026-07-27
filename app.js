@@ -36,6 +36,7 @@ let searchTerm = "";
 let sortMode = "fit";
 let editingStatusId = null;
 const STATUS_OPTIONS = ["Solid","Learning","Maybe","Suggested","Retired"];
+const STATUS_ICONS = {Solid:"✓", Learning:"◐", Maybe:"?", Suggested:"★", Retired:"✕"};
 
 document.getElementById("sortSelect").addEventListener("change", e=>{
   sortMode = e.target.value;
@@ -65,6 +66,15 @@ function showToast(msg){
   t.textContent = msg;
   t.classList.add("show");
   setTimeout(()=>t.classList.remove("show"), 1800);
+}
+
+// Plays the .removing exit animation on an element, then removes it from the DOM.
+function animateRemove(el, delay=200){
+  return new Promise(resolve=>{
+    if(!el){ resolve(); return; }
+    el.classList.add("removing");
+    setTimeout(()=>{ el.remove(); resolve(); }, delay);
+  });
 }
 
 function buildRangePrompt(missingSongs){
@@ -134,10 +144,10 @@ async function fetchSongs(){
 }
 
 function fitLabel(lowS, highS){
-  if(lowS===null || highS===null) return {cls:"fit-unknown", text:"RANGE NOT SET"};
-  if(lowS >= comfortLowS && highS <= comfortHighS) return {cls:"fit-easy", text:"EASY FIT"};
-  if(lowS >= stretchLowS && highS <= stretchHighS) return {cls:"fit-stretch", text:"STRETCH"};
-  return {cls:"fit-out", text:"OUT OF RANGE"};
+  if(lowS===null || highS===null) return {cls:"fit-unknown", text:"○ RANGE NOT SET"};
+  if(lowS >= comfortLowS && highS <= comfortHighS) return {cls:"fit-easy", text:"✓ EASY FIT"};
+  if(lowS >= stretchLowS && highS <= stretchHighS) return {cls:"fit-stretch", text:"△ STRETCH"};
+  return {cls:"fit-out", text:"✕ OUT OF RANGE"};
 }
 
 // Lower score = better fit against comfort zone. Unknown ranges sort last.
@@ -275,7 +285,7 @@ function render(){
             ${STATUS_OPTIONS.map(opt => `<option value="${opt}" ${opt===s.status?"selected":""}>${opt}</option>`).join("")}
           </select>
         ` : `
-          <div class="status-pill status-${s.status}" data-id="${s.id}">${s.status}</div>
+          <div class="status-pill status-${s.status}" data-id="${s.id}"><span class="status-icon">${STATUS_ICONS[s.status]||""}</span> ${s.status}</div>
         `}
       </div>
       ${renderRangeStrip(s.low_note, s.high_note, s.range_source)}
@@ -443,6 +453,8 @@ async function deleteSong(id, opts={}){
     const res = await fetch(`${SUPABASE_URL}/rest/v1/songs?id=eq.${id}`, {method:"DELETE", headers: HEADERS});
     if(!res.ok) throw new Error("Delete failed");
     showToast("Song removed");
+    const cardEl = document.querySelector(`.card[data-id="${id}"]`);
+    if(cardEl) await animateRemove(cardEl);
     fetchSongs();
   }catch(err){
     showToast("Error: " + err.message);
@@ -499,7 +511,7 @@ function renderLogHistory(entries){
     };
   });
   el.querySelectorAll(".logDelBtn").forEach(b=>{
-    b.onclick = (ev) => { ev.stopPropagation(); deletePerformance(b.dataset.id); };
+    b.onclick = (ev) => { ev.stopPropagation(); deletePerformance(b.dataset.id, b.closest(".log-history-item")); };
   });
 }
 
@@ -550,12 +562,13 @@ function closeLog(){
 document.getElementById("btnLogListClose").onclick = closeLog;
 logBackdrop.onclick = closeLog;
 
-async function deletePerformance(entryId){
+async function deletePerformance(entryId, itemEl){
   if(!confirm("Delete this performance log entry?")) return;
   try{
     const res = await fetch(`${SUPABASE_URL}/rest/v1/performances?id=eq.${entryId}`, {method:"DELETE", headers: HEADERS});
     if(!res.ok) throw new Error("Delete failed");
     showToast("Entry deleted");
+    if(itemEl) await animateRemove(itemEl);
     const songId = document.getElementById("logSongId").value;
     renderLogHistory(await fetchPerformances(songId));
     venueHistory = null; // invalidate venue cache since a venue entry changed
@@ -1002,7 +1015,7 @@ function renderRecommendations(results, outOfRangeResults, unconfirmedCount){
     b.onclick = () => addRecommendation(source[b.dataset.idx], b.closest(".rec-item"));
   });
   listEl.querySelectorAll(".rec-dismiss-btn").forEach(b=>{
-    b.onclick = () => b.closest(".rec-item").remove();
+    b.onclick = () => animateRemove(b.closest(".rec-item"));
   });
 }
 
@@ -1014,7 +1027,7 @@ async function addRecommendation(rec, itemEl){
     });
     if(!res.ok) throw new Error("Add failed");
     showToast(`Added "${rec.title}" to Learning`);
-    itemEl.remove();
+    await animateRemove(itemEl);
     fetchSongs();
   }catch(err){
     showToast("Error: " + err.message);
@@ -1196,6 +1209,47 @@ document.getElementById("checkMissingBtn").onclick = async () => {
     btn.disabled = false;
   }
 };
+
+// --- Swipe-to-dismiss for sheets (drag from the handle zone at the top) ---
+function enableSwipeToDismiss(sheetEl, closeFn){
+  if(!sheetEl) return;
+  const HANDLE_ZONE = 30; // px from the top of the sheet where a drag can start
+  let startY = null, currentY = null, dragging = false;
+
+  sheetEl.addEventListener("touchstart", (e) => {
+    const rect = sheetEl.getBoundingClientRect();
+    const touchY = e.touches[0].clientY;
+    if(touchY - rect.top > HANDLE_ZONE) return; // only start a drag from the handle area
+    startY = touchY;
+    currentY = touchY;
+    dragging = true;
+    sheetEl.classList.add("dragging");
+  }, {passive: true});
+
+  sheetEl.addEventListener("touchmove", (e) => {
+    if(!dragging) return;
+    currentY = e.touches[0].clientY;
+    const delta = Math.max(0, currentY - startY);
+    sheetEl.style.transform = `translateY(${delta}px)`;
+  }, {passive: true});
+
+  const endDrag = () => {
+    if(!dragging) return;
+    dragging = false;
+    sheetEl.classList.remove("dragging");
+    const delta = currentY !== null ? Math.max(0, currentY - startY) : 0;
+    sheetEl.style.transform = "";
+    if(delta > 90) closeFn();
+    startY = null; currentY = null;
+  };
+  sheetEl.addEventListener("touchend", endDrag);
+  sheetEl.addEventListener("touchcancel", endDrag);
+}
+
+enableSwipeToDismiss(document.getElementById("sheet"), closeSheet);
+enableSwipeToDismiss(document.getElementById("logSheet"), closeLog);
+enableSwipeToDismiss(document.getElementById("recSheet"), closeRecommendations);
+enableSwipeToDismiss(document.getElementById("settingsSheet"), closeSettings);
 
 loadTheme();
 fetchSongs();
