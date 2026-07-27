@@ -46,14 +46,14 @@ const sandbox = {};
 vm.createContext(sandbox);
 
 const setup = [
-  extractLineContaining('const COMFORT_LOW'),           // also declares COMFORT_HIGH
-  extractLineContaining('const STRETCH_LOW'),            // also declares STRETCH_HIGH
+  extractLineContaining('let COMFORT_LOW'),           // also declares COMFORT_HIGH
+  extractLineContaining('let STRETCH_LOW'),            // also declares STRETCH_HIGH
   extractLineContaining('const NOTE_VALUES'),
   extractFunction("noteToSemitone"),
-  extractLineContaining('const comfortLowS'),
-  extractLineContaining('const comfortHighS'),
-  extractLineContaining('const stretchLowS'),
-  extractLineContaining('const stretchHighS'),
+  extractLineContaining('let comfortLowS'),
+  extractLineContaining('let comfortHighS'),
+  extractLineContaining('let stretchLowS'),
+  extractLineContaining('let stretchHighS'),
   extractFunction("fitLabel"),
   extractFunction("fitScore"),
   extractLineContaining('const NOTE_NAMES'),

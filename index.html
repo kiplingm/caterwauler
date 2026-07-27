@@ -8,6 +8,32 @@
 </head>
 <body>
 
+<!-- Auth gate: shown until a session exists. Everything else in the body
+     stays exactly as it was, just hidden behind this overlay until login. -->
+<div class="sheet-backdrop open" id="authBackdrop"></div>
+<div class="sheet open" id="authSheet">
+  <h2>Sign in</h2>
+  <div class="artist" style="margin-bottom:16px;">
+    Enter your email — we'll send a sign-in link, no password needed.
+  </div>
+  <div id="authFormView">
+    <div class="field">
+      <label>EMAIL</label>
+      <input type="email" id="authEmail" placeholder="you@example.com" autocomplete="email">
+    </div>
+    <div id="authError" class="artist" style="display:none; color:#e85d4f; margin-top:6px;"></div>
+    <div class="sheet-actions">
+      <button class="btn-save" id="authSendBtn" style="flex:1;">Send sign-in link</button>
+    </div>
+  </div>
+  <div id="authSentView" style="display:none;">
+    <div class="artist">Check your email for the link — open it on this device.</div>
+    <div class="sheet-actions">
+      <button class="btn-cancel" id="authUseDifferentBtn" style="flex:1;">Use a different email</button>
+    </div>
+  </div>
+</div>
+
 <div class="top-bar">
   <div class="marquee">
     <div class="marquee-top">
@@ -167,6 +193,39 @@
 <div class="sheet" id="settingsSheet">
   <h2>Settings</h2>
 
+  <div class="settings-section-label">Account</div>
+  <div class="field">
+    <label>SIGNED IN AS</label>
+    <div class="artist" id="accountEmail">—</div>
+  </div>
+  <div class="field">
+    <label>VOCAL RANGE</label>
+    <div class="field-row" style="margin-top:6px;">
+      <div class="field">
+        <label>COMFORT LOW</label>
+        <input type="text" id="rComfortLow" placeholder="e.g. A2">
+      </div>
+      <div class="field">
+        <label>COMFORT HIGH</label>
+        <input type="text" id="rComfortHigh" placeholder="e.g. B4">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>STRETCH LOW</label>
+        <input type="text" id="rStretchLow" placeholder="e.g. G2">
+      </div>
+      <div class="field">
+        <label>STRETCH HIGH</label>
+        <input type="text" id="rStretchHigh" placeholder="e.g. D5">
+      </div>
+    </div>
+    <button class="check-missing-btn" id="saveRangeBtn" style="margin-top:10px;">Save range</button>
+  </div>
+  <div class="field">
+    <button class="check-missing-btn" id="signOutBtn">Sign out</button>
+  </div>
+
   <div class="settings-section-label">Appearance</div>
   <div class="field">
     <label>COLOR SCHEME</label>
@@ -193,6 +252,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

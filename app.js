@@ -1,14 +1,28 @@
 const SUPABASE_URL = "https://luykkuptcizkdigwness.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1eWtrdXB0Y2l6a2RpZ3duZXNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MTcyOTgsImV4cCI6MjEwMDM5MzI5OH0.IWrRp9mzUYOXJmd17-7_M6pnz3rw3LX5xMpnkXlolRw";
+// Publishable key (replaces the old static anon key). Same low privileges,
+// RLS-gated, safe to ship in client code — see Supabase's migration away
+// from the legacy anon key format.
+const PUBLISHABLE_KEY = "sb_publishable_xBonZeSOCmOIJ1dNb5kJBg_RIIYl0Dl";
+
 const HEADERS = {
-  "apikey": SUPABASE_KEY,
-  "Authorization": "Bearer " + SUPABASE_KEY,
+  "apikey": PUBLISHABLE_KEY,
+  "Authorization": "Bearer " + PUBLISHABLE_KEY, // replaced with the signed-in user's session token in onSignedIn()
   "Content-Type": "application/json"
 };
 
-// Kipling's vocal range
-const COMFORT_LOW = "A2", COMFORT_HIGH = "B4";
-const STRETCH_LOW = "G2", STRETCH_HIGH = "D5";
+// Used only for sign-in / session management (magic link, getSession,
+// onAuthStateChange, signOut). All the existing data calls below are left
+// exactly as they were — plain fetch() against HEADERS — so this stays a
+// small, additive change rather than a rewrite of 1000+ lines of working
+// fetch calls.
+const authClient = supabase.createClient(SUPABASE_URL, PUBLISHABLE_KEY);
+
+// Vocal range — now loaded per-user from the `profiles` table after
+// sign-in (see loadProfileRange()) instead of hardcoded. These start as
+// reasonable fallback defaults and get reassigned via applyRange() once
+// the profile loads or the user saves a new range in Settings.
+let COMFORT_LOW = "A2", COMFORT_HIGH = "B4";
+let STRETCH_LOW = "G2", STRETCH_HIGH = "D5";
 
 const NOTE_VALUES = {C:0,"C#":1,DB:1,D:2,"D#":3,EB:3,E:4,F:5,"F#":6,GB:6,G:7,"G#":8,AB:8,A:9,"A#":10,BB:10,B:11};
 
@@ -22,13 +36,34 @@ function noteToSemitone(note){
   return NOTE_VALUES[key] + (parseInt(octave)+1)*12;
 }
 
-const comfortLowS = noteToSemitone(COMFORT_LOW);
-const comfortHighS = noteToSemitone(COMFORT_HIGH);
-const stretchLowS = noteToSemitone(STRETCH_LOW);
-const stretchHighS = noteToSemitone(STRETCH_HIGH);
+let comfortLowS = noteToSemitone(COMFORT_LOW);
+let comfortHighS = noteToSemitone(COMFORT_HIGH);
+let stretchLowS = noteToSemitone(STRETCH_LOW);
+let stretchHighS = noteToSemitone(STRETCH_HIGH);
 
-document.getElementById("rangeLine").textContent =
-  `YOUR RANGE — COMFORT ${COMFORT_LOW}–${COMFORT_HIGH} · STRETCH ${STRETCH_LOW}–${STRETCH_HIGH}`;
+function updateRangeLineDisplay(){
+  const el = document.getElementById("rangeLine");
+  if(el){
+    el.textContent =
+      `YOUR RANGE — COMFORT ${COMFORT_LOW}–${COMFORT_HIGH} · STRETCH ${STRETCH_LOW}–${STRETCH_HIGH}`;
+  }
+}
+updateRangeLineDisplay();
+
+// Called after the profile loads post-sign-in, and after saving a new
+// range in Settings. Recomputes the derived semitone values and refreshes
+// both the header display and (via fetchSongs, called by the caller) fit
+// scoring across the songbook.
+function applyRange(comfortLow, comfortHigh, stretchLow, stretchHigh){
+  COMFORT_LOW = comfortLow; COMFORT_HIGH = comfortHigh;
+  STRETCH_LOW = stretchLow; STRETCH_HIGH = stretchHigh;
+  comfortLowS = noteToSemitone(COMFORT_LOW);
+  comfortHighS = noteToSemitone(COMFORT_HIGH);
+  stretchLowS = noteToSemitone(STRETCH_LOW);
+  stretchHighS = noteToSemitone(STRETCH_HIGH);
+  updateRangeLineDisplay();
+}
+
 
 let songs = [];
 let activeFilter = "All";
@@ -78,8 +113,8 @@ function animateRemove(el, delay=200){
 }
 
 function buildRangePrompt(missingSongs){
-  const list = missingSongs.map(s => `- ${s.title} — ${s.artist}`).join("\n");
-  return `Please research the vocal range (low and high note, e.g. "A2") for these songs from my karaoke tracker, then update them in my Supabase project (karaoke-prod, ref luykkuptcizkdigwness), table "songs", columns low_note/high_note, matched by title + artist:\n\n${list}\n\nFor context: my comfort range is A2–B4 and my full stretch range is G2–D5.`;
+  const list = missingSongs.map(s => `- "${s.title}" by ${s.artist} (row id: ${s.id})`).join("\n");
+  return `Please research the vocal range (low and high note, e.g. "A2") for these songs from my karaoke tracker, then update them in my Supabase project (karaoke-prod, ref luykkuptcizkdigwness), table "songs", columns low_note/high_note, matched by each song's row id (not by title/artist alone — the table has other users' songs in it too):\n\n${list}\n\nFor context: my comfort range is ${COMFORT_LOW}–${COMFORT_HIGH} and my full stretch range is ${STRETCH_LOW}–${STRETCH_HIGH}.`;
 }
 
 async function askClaude(promptText, boxEl){
@@ -1077,6 +1112,10 @@ const settingsBackdrop = document.getElementById("settingsBackdrop");
 document.getElementById("settingsBtn").onclick = () => {
   renderThemeGrid();
   document.getElementById("missingResults").innerHTML = "";
+  document.getElementById("rComfortLow").value = COMFORT_LOW;
+  document.getElementById("rComfortHigh").value = COMFORT_HIGH;
+  document.getElementById("rStretchLow").value = STRETCH_LOW;
+  document.getElementById("rStretchHigh").value = STRETCH_HIGH;
   settingsBackdrop.classList.add("open");
   settingsSheet.classList.add("open");
 };
@@ -1086,6 +1125,49 @@ function closeSettings(){
 }
 document.getElementById("btnSettingsClose").onclick = closeSettings;
 settingsBackdrop.onclick = closeSettings;
+
+document.getElementById("saveRangeBtn").onclick = async () => {
+  const newComfortLow = document.getElementById("rComfortLow").value.trim();
+  const newComfortHigh = document.getElementById("rComfortHigh").value.trim();
+  const newStretchLow = document.getElementById("rStretchLow").value.trim();
+  const newStretchHigh = document.getElementById("rStretchHigh").value.trim();
+
+  if(noteToSemitone(newComfortLow) == null || noteToSemitone(newComfortHigh) == null){
+    showToast("Comfort notes need to look like A2, C#4, etc.");
+    return;
+  }
+  const useStretchLow = noteToSemitone(newStretchLow) != null ? newStretchLow : newComfortLow;
+  const useStretchHigh = noteToSemitone(newStretchHigh) != null ? newStretchHigh : newComfortHigh;
+
+  try{
+    const { data: { session } } = await authClient.auth.getSession();
+    if(!session) return;
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${session.user.id}`, {
+      method: "PATCH",
+      headers: {...HEADERS, "Prefer":"return=minimal"},
+      body: JSON.stringify({
+        comfort_low: newComfortLow,
+        comfort_high: newComfortHigh,
+        stretch_low: useStretchLow,
+        stretch_high: useStretchHigh,
+        range_mode: "manual",
+        updated_at: new Date().toISOString()
+      })
+    });
+    if(!res.ok) throw new Error("Save failed");
+    applyRange(newComfortLow, newComfortHigh, useStretchLow, useStretchHigh);
+    fetchSongs(); // re-render fit scoring against the new range
+    showToast("Range saved");
+  }catch(e){
+    showToast("Couldn't save range — try again");
+  }
+};
+
+document.getElementById("signOutBtn").onclick = async () => {
+  if(!confirm("Sign out?")) return;
+  await authClient.auth.signOut();
+  window.location.reload();
+};
 
 document.getElementById("exportDataBtn").onclick = async () => {
   const btn = document.getElementById("exportDataBtn");
@@ -1251,5 +1333,123 @@ enableSwipeToDismiss(document.getElementById("logSheet"), closeLog);
 enableSwipeToDismiss(document.getElementById("recSheet"), closeRecommendations);
 enableSwipeToDismiss(document.getElementById("settingsSheet"), closeSettings);
 
-loadTheme();
-fetchSongs();
+// --- Auth gate ---------------------------------------------------------
+// Nothing below runs until a session exists. On first load we check for
+// an existing session (e.g. from a previous visit); if there isn't one,
+// the login sheet (baked into index.html as always-open) stays visible
+// and blocks interaction with the rest of the app, which is still mid-
+// skeleton-load underneath it. onAuthStateChange fires once the magic
+// link redirect completes and Supabase picks up the session from the URL.
+
+const authBackdrop = document.getElementById("authBackdrop");
+const authSheet = document.getElementById("authSheet");
+let signedIn = false;
+
+async function onSignedIn(session){
+  if(signedIn) return; // guard against double-init if the auth event fires twice
+  signedIn = true;
+
+  HEADERS.Authorization = "Bearer " + session.access_token;
+  authBackdrop.classList.remove("open");
+  authSheet.classList.remove("open");
+
+  const emailEl = document.getElementById("accountEmail");
+  if(emailEl) emailEl.textContent = session.user.email;
+
+  await loadProfileRange(session.user.id);
+
+  loadTheme();
+  fetchSongs();
+}
+
+async function loadProfileRange(userId){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=*`, {headers: HEADERS});
+    if(!res.ok) throw new Error("Profile lookup failed");
+    const rows = await res.json();
+    let profile = rows[0];
+
+    if(!profile){
+      // First time this user has signed in — create a starting profile
+      // row using the current fallback defaults (A2–B4 / G2–D5). They can
+      // change it immediately in Settings.
+      const createRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
+        method: "POST",
+        headers: {...HEADERS, "Prefer":"return=representation"},
+        body: JSON.stringify({
+          id: userId,
+          comfort_low: COMFORT_LOW, comfort_high: COMFORT_HIGH,
+          stretch_low: STRETCH_LOW, stretch_high: STRETCH_HIGH,
+          range_mode: "manual"
+        })
+      });
+      if(createRes.ok){
+        const created = await createRes.json();
+        profile = created[0];
+      }
+    }
+
+    if(profile && profile.comfort_low && profile.comfort_high){
+      applyRange(
+        profile.comfort_low,
+        profile.comfort_high,
+        profile.stretch_low || profile.comfort_low,
+        profile.stretch_high || profile.comfort_high
+      );
+    }
+    // If comfort_low/high are still null (e.g. a profile created by the
+    // other karaoke-app in "auto" mode, before ever setting values here),
+    // we just keep the A2–B4/G2–D5 fallback until they save one in
+    // Settings — applyRange() is safe to skip in that case.
+  }catch(e){
+    console.error("Failed to load profile range, using defaults", e);
+  }
+}
+
+document.getElementById("authSendBtn").onclick = async () => {
+  const email = document.getElementById("authEmail").value.trim();
+  const errEl = document.getElementById("authError");
+  errEl.style.display = "none";
+  if(!email) return;
+
+  const btn = document.getElementById("authSendBtn");
+  btn.disabled = true;
+  btn.textContent = "Sending…";
+
+  const { error } = await authClient.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.origin + window.location.pathname }
+  });
+
+  btn.disabled = false;
+  btn.textContent = "Send sign-in link";
+
+  if(error){
+    errEl.textContent = error.message;
+    errEl.style.display = "block";
+  }else{
+    document.getElementById("authFormView").style.display = "none";
+    document.getElementById("authSentView").style.display = "block";
+  }
+};
+
+document.getElementById("authUseDifferentBtn").onclick = () => {
+  document.getElementById("authFormView").style.display = "block";
+  document.getElementById("authSentView").style.display = "none";
+};
+
+(async function initAuthGate(){
+  const { data: { session } } = await authClient.auth.getSession();
+  if(session){
+    onSignedIn(session);
+  }else{
+    authBackdrop.classList.add("open");
+    authSheet.classList.add("open");
+  }
+
+  authClient.auth.onAuthStateChange((_event, newSession) => {
+    if(newSession && !signedIn){
+      onSignedIn(newSession);
+    }
+  });
+})();
