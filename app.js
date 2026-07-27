@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "2";
+const BUILD_VERSION = "3";
 const BUILD_DATE = "2026-07-27";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -38,6 +38,9 @@ const authClient = supabase.createClient(SUPABASE_URL, PUBLISHABLE_KEY);
 // the profile loads or the user saves a new range in Settings.
 let COMFORT_LOW = "A2", COMFORT_HIGH = "B4";
 let STRETCH_LOW = "G2", STRETCH_HIGH = "D5";
+// 'auto' (derived from Solid-status songs) or 'manual' (typed in directly).
+// Shared with the other karaoke-app project via the same profiles row.
+let currentRangeMode = "manual";
 
 const NOTE_VALUES = {C:0,"C#":1,DB:1,D:2,"D#":3,EB:3,E:4,F:5,"F#":6,GB:6,G:7,"G#":8,AB:8,A:9,"A#":10,BB:10,B:11};
 
@@ -412,6 +415,7 @@ document.getElementById("fabAdd").onclick = ()=>{
   document.getElementById("editId").value = "";
   ["fTitle","fArtist","fLow","fHigh","fGenre","fKeyNotes"].forEach(id=>document.getElementById(id).value="");
   document.getElementById("fStatus").value = "Maybe";
+  document.getElementById("fRangeSource").value = "manual";
   document.getElementById("titleSuggestions").classList.remove("open");
   document.getElementById("artistSuggestions").classList.remove("open");
   document.getElementById("btnDeleteSong").style.display = "none";
@@ -437,6 +441,7 @@ function openEdit(id){
   document.getElementById("fArtist").value = s.artist || "";
   document.getElementById("fLow").value = s.low_note || "";
   document.getElementById("fHigh").value = s.high_note || "";
+  document.getElementById("fRangeSource").value = s.range_source || "manual";
   document.getElementById("fStatus").value = s.status || "Maybe";
   document.getElementById("fGenre").value = s.genre || "";
   document.getElementById("fKeyNotes").value = s.key_notes || "";
@@ -465,7 +470,7 @@ document.getElementById("btnSave").onclick = async ()=>{
     status: document.getElementById("fStatus").value,
     genre: document.getElementById("fGenre").value.trim() || null,
     key_notes: document.getElementById("fKeyNotes").value.trim() || null,
-    range_source: "manual",
+    range_source: document.getElementById("fRangeSource").value || "manual",
     updated_at: new Date().toISOString()
   };
 
@@ -878,13 +883,21 @@ function wireAutocomplete(inputId, listId){
         document.getElementById("fTitle").value = picked.title;
         document.getElementById("fArtist").value = picked.artist;
         list.classList.remove("open");
+        tryAutoFillRange(picked.title, picked.artist);
       });
     }, 250);
   });
 
   input.addEventListener("blur", () => {
     // Delay so a click on a suggestion registers before the list closes
-    setTimeout(() => list.classList.remove("open"), 150);
+    setTimeout(() => {
+      list.classList.remove("open");
+      // Fallback for manually-typed title/artist (no autocomplete pick) —
+      // once both fields have something and focus leaves, try a lookup.
+      const title = document.getElementById("fTitle").value.trim();
+      const artist = document.getElementById("fArtist").value.trim();
+      if(title && artist) tryAutoFillRange(title, artist);
+    }, 150);
   });
   input.addEventListener("focus", () => {
     if(list.innerHTML.trim()) list.classList.add("open");
@@ -893,6 +906,14 @@ function wireAutocomplete(inputId, listId){
 
 wireAutocomplete("fTitle", "titleSuggestions");
 wireAutocomplete("fArtist", "artistSuggestions");
+
+// If a range was auto-filled from the catalog and the user then edits it
+// by hand, that's now their own manual value, not the catalog's.
+["fLow","fHigh"].forEach(id => {
+  document.getElementById(id).addEventListener("input", () => {
+    document.getElementById("fRangeSource").value = "manual";
+  });
+});
 // --- Recommendations (v1: catalog-based — matches artists you're Solid on, gated by vocal range) ---
 const recSheet = document.getElementById("recSheet");
 const recBackdrop = document.getElementById("recBackdrop");
@@ -920,6 +941,45 @@ async function fetchSongRanges(){
     return map;
   }catch(e){
     return new Map();
+  }
+}
+
+// Looks up a single song in the shared song_ranges table by normalized
+// title+artist match. Used to auto-fill low/high note when adding a song
+// that's already been researched, instead of leaving it blank for the
+// user to fill in (or duplicate work someone already did).
+async function lookupSongRange(title, artist){
+  const tNorm = normalizeForMatch(title);
+  const aNorm = normalizeForMatch(artist);
+  if(!tNorm || !aNorm) return null;
+  try{
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/song_ranges?select=low_note,high_note&title_normalized=eq.${encodeURIComponent(tNorm)}&artist_normalized=eq.${encodeURIComponent(aNorm)}&limit=1`,
+      {headers: HEADERS}
+    );
+    if(!res.ok) return null;
+    const rows = await res.json();
+    return rows[0] || null;
+  }catch(e){
+    return null;
+  }
+}
+
+// Fills fLow/fHigh from song_ranges if there's a match and the fields are
+// currently empty (never overwrites something the user already has, e.g.
+// when editing an existing song). Marks the source so it's visually
+// distinguishable and so a later manual edit can override it cleanly.
+async function tryAutoFillRange(title, artist){
+  const lowEl = document.getElementById("fLow");
+  const highEl = document.getElementById("fHigh");
+  if(lowEl.value.trim() || highEl.value.trim()) return; // don't clobber existing values
+
+  const match = await lookupSongRange(title, artist);
+  if(match && match.low_note && match.high_note){
+    lowEl.value = match.low_note;
+    highEl.value = match.high_note;
+    document.getElementById("fRangeSource").value = "estimated";
+    showToast(`Range filled in from the catalog (${match.low_note}–${match.high_note})`);
   }
 }
 
@@ -1124,13 +1184,94 @@ function renderThemeGrid(){
 const settingsSheet = document.getElementById("settingsSheet");
 const settingsBackdrop = document.getElementById("settingsBackdrop");
 
+// Widest span among current Solid-status songs that actually have a
+// known low/high note. Songs marked Solid without range data don't move
+// the numbers — they just don't count until a range is filled in.
+function computeAutoRange(){
+  let lowest = null, highest = null, count = 0;
+  songs.forEach(s => {
+    if(s.status !== "Solid") return;
+    const lowS = noteToSemitone(s.low_note);
+    const highS = noteToSemitone(s.high_note);
+    if(lowS == null || highS == null) return;
+    count++;
+    if(lowest == null || lowS < lowest.semitone) lowest = {note: s.low_note, semitone: lowS};
+    if(highest == null || highS > highest.semitone) highest = {note: s.high_note, semitone: highS};
+  });
+  if(!lowest || !highest) return null;
+  // Stretch band extends 3 semitones past the widest comfort span in each
+  // direction — a heuristic default (not derived from data) so "stretch"
+  // fit scoring still means something in auto mode, rather than being a
+  // zero-width band identical to comfort.
+  return {
+    comfortLow: lowest.note, comfortHigh: highest.note,
+    stretchLow: semitoneToNoteName(lowest.semitone - 3),
+    stretchHigh: semitoneToNoteName(highest.semitone + 3),
+    count
+  };
+}
+
+// Re-scores fit against the in-memory songs list without a network
+// round-trip — used after the active range changes (mode switch, auto
+// recompute, manual save) so the list re-colors immediately.
+function recomputeFitScores(){
+  songs = songs.map(s => ({...s, fit_score: fitScore(s.low_note, s.high_note)}));
+  render();
+}
+
+async function patchProfile(updates){
+  const { data: { session } } = await authClient.auth.getSession();
+  if(!session) return false;
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${session.user.id}`, {
+    method: "PATCH",
+    headers: {...HEADERS, "Prefer":"return=minimal"},
+    body: JSON.stringify({...updates, updated_at: new Date().toISOString()})
+  });
+  return res.ok;
+}
+
+// Renders the toggle + fields for the given mode. Does NOT save anything
+// by itself — callers (the toggle button handlers) decide when to persist.
+function renderRangeModeUI(mode){
+  document.getElementById("rangeModeAutoBtn").classList.toggle("active", mode === "auto");
+  document.getElementById("rangeModeManualBtn").classList.toggle("active", mode === "manual");
+
+  const lowEl = document.getElementById("rComfortLow");
+  const highEl = document.getElementById("rComfortHigh");
+  const stretchLowEl = document.getElementById("rStretchLow");
+  const stretchHighEl = document.getElementById("rStretchHigh");
+  const summaryEl = document.getElementById("autoRangeSummary");
+  const saveBtn = document.getElementById("saveRangeBtn");
+
+  if(mode === "auto"){
+    [lowEl, highEl, stretchLowEl, stretchHighEl].forEach(el => el.disabled = true);
+    saveBtn.style.display = "none";
+    summaryEl.style.display = "block";
+
+    const auto = computeAutoRange();
+    if(auto){
+      lowEl.value = auto.comfortLow;
+      highEl.value = auto.comfortHigh;
+      stretchLowEl.value = auto.stretchLow;
+      stretchHighEl.value = auto.stretchHigh;
+      summaryEl.textContent = `Based on ${auto.count} Solid song${auto.count===1?"":"s"} with a known range.`;
+    }else{
+      lowEl.value = ""; highEl.value = ""; stretchLowEl.value = ""; stretchHighEl.value = "";
+      summaryEl.textContent = "No Solid songs with a known range yet — mark some Solid, or switch to Manual.";
+    }
+  }else{
+    [lowEl, highEl, stretchLowEl, stretchHighEl].forEach(el => el.disabled = false);
+    saveBtn.style.display = "block";
+    summaryEl.style.display = "none";
+    lowEl.value = COMFORT_LOW; highEl.value = COMFORT_HIGH;
+    stretchLowEl.value = STRETCH_LOW; stretchHighEl.value = STRETCH_HIGH;
+  }
+}
+
 document.getElementById("settingsBtn").onclick = () => {
   renderThemeGrid();
   document.getElementById("missingResults").innerHTML = "";
-  document.getElementById("rComfortLow").value = COMFORT_LOW;
-  document.getElementById("rComfortHigh").value = COMFORT_HIGH;
-  document.getElementById("rStretchLow").value = STRETCH_LOW;
-  document.getElementById("rStretchHigh").value = STRETCH_HIGH;
+  renderRangeModeUI(currentRangeMode);
   settingsBackdrop.classList.add("open");
   settingsSheet.classList.add("open");
 };
@@ -1140,6 +1281,30 @@ function closeSettings(){
 }
 document.getElementById("btnSettingsClose").onclick = closeSettings;
 settingsBackdrop.onclick = closeSettings;
+
+document.getElementById("rangeModeAutoBtn").onclick = async () => {
+  currentRangeMode = "auto";
+  renderRangeModeUI("auto");
+  const auto = computeAutoRange();
+  const ok = await patchProfile({
+    range_mode: "auto",
+    ...(auto ? {
+      comfort_low: auto.comfortLow, comfort_high: auto.comfortHigh,
+      stretch_low: auto.stretchLow, stretch_high: auto.stretchHigh
+    } : {})
+  });
+  if(ok && auto){
+    applyRange(auto.comfortLow, auto.comfortHigh, auto.stretchLow, auto.stretchHigh);
+    recomputeFitScores();
+  }
+  showToast(ok ? "Switched to auto range" : "Saved locally — couldn't reach the server");
+};
+
+document.getElementById("rangeModeManualBtn").onclick = async () => {
+  currentRangeMode = "manual";
+  renderRangeModeUI("manual");
+  await patchProfile({ range_mode: "manual" });
+};
 
 document.getElementById("saveRangeBtn").onclick = async () => {
   const newComfortLow = document.getElementById("rComfortLow").value.trim();
@@ -1154,26 +1319,18 @@ document.getElementById("saveRangeBtn").onclick = async () => {
   const useStretchLow = noteToSemitone(newStretchLow) != null ? newStretchLow : newComfortLow;
   const useStretchHigh = noteToSemitone(newStretchHigh) != null ? newStretchHigh : newComfortHigh;
 
-  try{
-    const { data: { session } } = await authClient.auth.getSession();
-    if(!session) return;
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${session.user.id}`, {
-      method: "PATCH",
-      headers: {...HEADERS, "Prefer":"return=minimal"},
-      body: JSON.stringify({
-        comfort_low: newComfortLow,
-        comfort_high: newComfortHigh,
-        stretch_low: useStretchLow,
-        stretch_high: useStretchHigh,
-        range_mode: "manual",
-        updated_at: new Date().toISOString()
-      })
-    });
-    if(!res.ok) throw new Error("Save failed");
+  const ok = await patchProfile({
+    comfort_low: newComfortLow,
+    comfort_high: newComfortHigh,
+    stretch_low: useStretchLow,
+    stretch_high: useStretchHigh,
+    range_mode: "manual"
+  });
+  if(ok){
     applyRange(newComfortLow, newComfortHigh, useStretchLow, useStretchHigh);
-    fetchSongs(); // re-render fit scoring against the new range
+    recomputeFitScores();
     showToast("Range saved");
-  }catch(e){
+  }else{
     showToast("Couldn't save range — try again");
   }
 };
@@ -1374,7 +1531,22 @@ async function onSignedIn(session){
   await loadProfileRange(session.user.id);
 
   loadTheme();
-  fetchSongs();
+  await fetchSongs();
+
+  // Auto mode needs the songs list loaded first (computeAutoRange reads
+  // from it), so this has to happen after fetchSongs() resolves, not
+  // inside loadProfileRange() above.
+  if(currentRangeMode === "auto"){
+    const auto = computeAutoRange();
+    if(auto){
+      applyRange(auto.comfortLow, auto.comfortHigh, auto.stretchLow, auto.stretchHigh);
+      recomputeFitScores();
+      patchProfile({
+        comfort_low: auto.comfortLow, comfort_high: auto.comfortHigh,
+        stretch_low: auto.stretchLow, stretch_high: auto.stretchHigh
+      });
+    }
+  }
 }
 
 async function loadProfileRange(userId){
@@ -1385,18 +1557,13 @@ async function loadProfileRange(userId){
     let profile = rows[0];
 
     if(!profile){
-      // First time this user has signed in — create a starting profile
-      // row using the current fallback defaults (A2–B4 / G2–D5). They can
-      // change it immediately in Settings.
+      // First time this user has signed in anywhere — create a starting
+      // profile row. Defaults to auto mode (based on Solid songs), same
+      // default as the other karaoke-app project shares.
       const createRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
         method: "POST",
         headers: {...HEADERS, "Prefer":"return=representation"},
-        body: JSON.stringify({
-          id: userId,
-          comfort_low: COMFORT_LOW, comfort_high: COMFORT_HIGH,
-          stretch_low: STRETCH_LOW, stretch_high: STRETCH_HIGH,
-          range_mode: "manual"
-        })
+        body: JSON.stringify({ id: userId, range_mode: "auto" })
       });
       if(createRes.ok){
         const created = await createRes.json();
@@ -1404,7 +1571,11 @@ async function loadProfileRange(userId){
       }
     }
 
-    if(profile && profile.comfort_low && profile.comfort_high){
+    if(!profile) return;
+
+    currentRangeMode = profile.range_mode === "auto" ? "auto" : "manual";
+
+    if(profile.comfort_low && profile.comfort_high){
       applyRange(
         profile.comfort_low,
         profile.comfort_high,
@@ -1412,10 +1583,11 @@ async function loadProfileRange(userId){
         profile.stretch_high || profile.comfort_high
       );
     }
-    // If comfort_low/high are still null (e.g. a profile created by the
-    // other karaoke-app in "auto" mode, before ever setting values here),
-    // we just keep the A2–B4/G2–D5 fallback until they save one in
-    // Settings — applyRange() is safe to skip in that case.
+    // If comfort_low/high are still null (brand new profile, or auto mode
+    // that hasn't computed anything yet), we keep the A2–B4/G2–D5
+    // fallback for now — auto mode gets recomputed properly in
+    // onSignedIn() once songs are loaded; manual mode just waits for the
+    // user to set something in Settings.
   }catch(e){
     console.error("Failed to load profile range, using defaults", e);
   }

@@ -236,6 +236,16 @@
     width:100%; background:var(--bg); border:1px solid var(--line); border-radius:9px; padding:10px 11px;
     color:var(--cream); font-size:14.5px; font-family:'Inter',sans-serif;
   }
+  .field input:disabled{
+    opacity:0.55; color:var(--cream-dim); cursor:not-allowed;
+  }
+  .range-mode-toggle{display:flex; gap:8px;}
+  .range-mode-btn{
+    flex:1; padding:9px 6px; border-radius:9px; border:1px solid var(--line);
+    background:transparent; color:var(--cream-dim); font-family:'Inter',sans-serif;
+    font-size:12px; font-weight:600; cursor:pointer;
+  }
+  .range-mode-btn.active{border-color:var(--teal); color:var(--teal); background:rgba(61,218,215,0.1);}
   .field-row{display:flex; gap:10px;}
   .field-row .field{flex:1;}
 

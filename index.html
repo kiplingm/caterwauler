@@ -99,6 +99,7 @@
       <input type="text" id="fHigh" placeholder="e.g. F4">
     </div>
   </div>
+  <input type="hidden" id="fRangeSource" value="manual">
   <div class="field-row">
     <div class="field">
       <label>STATUS</label>
@@ -200,6 +201,11 @@
   </div>
   <div class="field">
     <label>VOCAL RANGE</label>
+    <div class="range-mode-toggle">
+      <button type="button" class="range-mode-btn" id="rangeModeAutoBtn">Auto — from Solid songs</button>
+      <button type="button" class="range-mode-btn" id="rangeModeManualBtn">Manual</button>
+    </div>
+    <div class="artist" id="autoRangeSummary" style="display:none; margin:8px 0 4px;"></div>
     <div class="field-row" style="margin-top:6px;">
       <div class="field">
         <label>COMFORT LOW</label>
