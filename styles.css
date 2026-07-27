@@ -182,7 +182,7 @@
     border:1px solid var(--line);
   }
   .range-comfort{position:absolute; top:0; bottom:0; background:rgba(61,218,215,0.18); border-left:1px solid var(--teal); border-right:1px solid var(--teal);}
-  .range-song{position:absolute; top:-3px; height:16px; border-radius:5px; background:linear-gradient(90deg, var(--gold), #f2d38a); box-shadow:0 0 8px rgba(232,183,78,0.5);}
+  .range-song{position:absolute; top:-3px; height:16px; border-radius:5px; box-shadow:0 1px 4px rgba(0,0,0,0.4);}
   .range-labels{display:flex; justify-content:space-between; font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:var(--cream-dim); margin-top:5px;}
   .range-fit{font-family:'IBM Plex Mono',monospace; font-size:10px; margin-top:4px;}
   .fit-easy{color:var(--green);} .fit-stretch{color:var(--gold);} .fit-out{color:var(--red);} .fit-unknown{color:var(--cream-dim);}

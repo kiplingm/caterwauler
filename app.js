@@ -260,6 +260,62 @@ function transpositionMessage(lowS, highS){
   return `Try shifting ${dir} ${Math.abs(shift)} semitone${Math.abs(shift)===1?"":"s"} (${newLow}–${newHigh}) for ${zoneLabel}.`;
 }
 
+// Reads the active theme's green/gold/red as RGB triples so the gradient
+// always matches whichever color scheme is currently selected.
+function getFitColors(){
+  const style = getComputedStyle(document.body);
+  const parse = varName => {
+    const hex = style.getPropertyValue(varName).trim();
+    const m = hex.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+    if(!m) return [111,191,115]; // fallback green
+    return [parseInt(m[1],16), parseInt(m[2],16), parseInt(m[3],16)];
+  };
+  return { green: parse("--green"), gold: parse("--gold"), red: parse("--red") };
+}
+
+function lerpColor(a, b, t){
+  t = Math.max(0, Math.min(1, t));
+  const rgb = [0,1,2].map(i => Math.round(a[i] + (b[i]-a[i])*t));
+  return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+}
+
+// Maps a semitone position to a color: pure green inside the comfort zone,
+// fading to gold across the gap between comfort and stretch, then fading
+// further to red the farther a note sits past the stretch zone.
+function colorForSemitone(s, colors){
+  if(s >= comfortLowS && s <= comfortHighS) return lerpColor(colors.green, colors.green, 0);
+
+  let distBeyondComfort, gapToStretch;
+  if(s < comfortLowS){
+    distBeyondComfort = comfortLowS - s;
+    gapToStretch = Math.max(1, comfortLowS - stretchLowS);
+  } else {
+    distBeyondComfort = s - comfortHighS;
+    gapToStretch = Math.max(1, stretchHighS - comfortHighS);
+  }
+
+  if(distBeyondComfort <= gapToStretch){
+    return lerpColor(colors.green, colors.gold, distBeyondComfort / gapToStretch);
+  }
+  const REDFALLOFF_SEMITONES = 4; // how many semitones past the stretch edge until it's fully red
+  const t = Math.min(1, (distBeyondComfort - gapToStretch) / REDFALLOFF_SEMITONES);
+  return lerpColor(colors.gold, colors.red, t);
+}
+
+// Builds a left-to-right CSS gradient across a song's own low→high span,
+// sampling one color stop per semitone so the bar visually shows exactly
+// which notes are comfortable vs. risky.
+function rangeGradient(lowS, highS){
+  const colors = getFitColors();
+  if(lowS === highS) return colorForSemitone(lowS, colors);
+  const stops = [];
+  for(let s = lowS; s <= highS; s++){
+    const pctLocal = ((s - lowS) / (highS - lowS)) * 100;
+    stops.push(`${colorForSemitone(s, colors)} ${pctLocal.toFixed(1)}%`);
+  }
+  return `linear-gradient(to right, ${stops.join(", ")})`;
+}
+
 function renderRangeStrip(low, high, rangeSource){
   const lowS = noteToSemitone(low), highS = noteToSemitone(high);
   const spanLow = stretchLowS - 2, spanHigh = stretchHighS + 2;
@@ -271,7 +327,8 @@ function renderRangeStrip(low, high, rangeSource){
   if(lowS!==null && highS!==null){
     const l = pct(lowS), r = pct(highS);
     const width = Math.max(r-l, 2.5);
-    songBar = `<div class="range-song" style="left:${l}%; width:${width}%;"></div>`;
+    const gradient = rangeGradient(lowS, highS);
+    songBar = `<div class="range-song" style="left:${l}%; width:${width}%; background:${gradient};"></div>`;
   }
   const fit = fitLabel(lowS, highS);
   const suggestionHtml = fit.cls === "fit-out"
