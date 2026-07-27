@@ -1,3 +1,18 @@
+// Bumped manually with each deploy — there's no build pipeline here, just
+// static files served by GitHub Pages, so this is a simple manual marker
+// to confirm which version is actually live (useful given Pages/browser
+// caching can lag behind a push by a minute or two).
+const BUILD_VERSION = "2";
+const BUILD_DATE = "2026-07-27";
+
+const buildInfoEl = document.getElementById("buildInfo");
+if(buildInfoEl){
+  const formattedDate = new Date(BUILD_DATE + "T00:00:00").toLocaleDateString(undefined, {
+    year: "numeric", month: "long", day: "numeric"
+  });
+  buildInfoEl.textContent = `Build ${BUILD_VERSION} — ${formattedDate}`;
+}
+
 const SUPABASE_URL = "https://luykkuptcizkdigwness.supabase.co";
 // Publishable key (replaces the old static anon key). Same low privileges,
 // RLS-gated, safe to ship in client code — see Supabase's migration away
