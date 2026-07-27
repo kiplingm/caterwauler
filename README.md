@@ -41,3 +41,10 @@ node tests.js
   entry due to text normalization gaps (e.g. "and" vs "&" in artist
   names) — catalog-dependent features (autocomplete, range auto-fill)
   just won't fire for those specific songs.
+
+## To do
+- Create test users and support admin impersonation of them, restricted
+  to admins only. `kiplingm@gmail.com` is the only admin for now — needs
+  an `is_admin` flag (or admin allowlist) plus an impersonation flow that
+  respects the existing per-user RLS policies rather than bypassing them
+  outright.
