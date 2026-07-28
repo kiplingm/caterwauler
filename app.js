@@ -1753,6 +1753,19 @@ document.getElementById("authUseDifferentBtn").onclick = () => {
 };
 
 (async function initAuthGate(){
+  // A "?new=1" link (e.g. https://.../?new=1) always lands on the sign-in
+  // sheet, even on a device that's already signed in — useful for handing
+  // someone else your URL to create their own account without it just
+  // resuming your session. Strip the param right after so a page refresh
+  // doesn't keep forcing a sign-out.
+  const params = new URLSearchParams(window.location.search);
+  if(params.get("new") === "1"){
+    await authClient.auth.signOut();
+    params.delete("new");
+    const cleanUrl = window.location.pathname + (params.toString() ? "?" + params.toString() : "");
+    window.history.replaceState({}, "", cleanUrl);
+  }
+
   const { data: { session } } = await authClient.auth.getSession();
   if(session){
     onSignedIn(session);
