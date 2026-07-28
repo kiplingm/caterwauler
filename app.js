@@ -398,6 +398,18 @@ function render(){
       if(a.fit_score !== b.fit_score) return b.fit_score - a.fit_score;
       return (a.title||"").localeCompare(b.title||"");
     }
+    if(sortMode === "highest" || sortMode === "lowest"){
+      // Sort by actual pitch (converted to semitones, not string compare —
+      // "G4" > "A2" alphabetically would be wrong). Songs missing a note
+      // sort to the bottom either way.
+      const noteField = sortMode === "highest" ? "high_note" : "low_note";
+      const aS = noteToSemitone(a[noteField]), bS = noteToSemitone(b[noteField]);
+      const aUnknown = aS===null, bUnknown = bS===null;
+      if(aUnknown !== bUnknown) return aUnknown ? 1 : -1;
+      if(aUnknown && bUnknown) return (a.title||"").localeCompare(b.title||"");
+      if(aS !== bS) return sortMode === "highest" ? bS - aS : aS - bS;
+      return (a.title||"").localeCompare(b.title||"");
+    }
     // fit: best range match first, tie-broken by title
     if(a.fit_score !== b.fit_score) return a.fit_score - b.fit_score;
     return (a.title||"").localeCompare(b.title||"");
