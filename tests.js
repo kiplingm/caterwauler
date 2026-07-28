@@ -48,6 +48,7 @@ vm.createContext(sandbox);
 const setup = [
   extractLineContaining('let COMFORT_LOW'),           // also declares COMFORT_HIGH
   extractLineContaining('let STRETCH_LOW'),            // also declares STRETCH_HIGH
+  "var songs = [];",
   extractLineContaining('const NOTE_VALUES'),
   extractFunction("noteToSemitone"),
   extractLineContaining('let comfortLowS'),
@@ -61,6 +62,7 @@ const setup = [
   extractFunction("suggestTransposition"),
   extractFunction("transpositionMessage"),
   extractFunction("normalizeForMatch"),
+  extractFunction("computeAutoRange"),
 ].join("\n\n");
 
 vm.runInContext(setup, sandbox);
@@ -135,6 +137,56 @@ eq(sandbox.normalizeForMatch("Jim's Home-Plate Tavern!"), "jimshomeplatetavern",
 eq(sandbox.normalizeForMatch("The Killers"), sandbox.normalizeForMatch("the killers"), "case-insensitive");
 eq(sandbox.normalizeForMatch(""), "", "empty string stays empty");
 eq(sandbox.normalizeForMatch(null), "", "null is handled without throwing");
+
+// --- computeAutoRange ---
+sandbox.songs = [];
+eq(sandbox.computeAutoRange(), null, "no songs at all = no auto range");
+{
+  // No Learning/Maybe evidence at all: falls back to the 3-semitone pad heuristic.
+  sandbox.songs = [
+    {status:"Solid", low_note:"G2", high_note:"D4"},
+    {status:"Solid", low_note:"A2", high_note:"D5"},
+  ];
+  const r = sandbox.computeAutoRange();
+  eq(r.comfortLow, "G2", "comfort low = min across Solid songs");
+  eq(r.comfortHigh, "D5", "comfort high = max across Solid songs");
+  eq(r.stretchLow, "E2", "no Learning/Maybe evidence below comfort -> falls back to 3-semitone pad");
+  eq(r.stretchHigh, "F5", "no Learning/Maybe evidence above comfort -> falls back to 3-semitone pad");
+}
+{
+  // A Learning song that reaches higher than any Solid song should pull
+  // the stretch ceiling up to match real evidence, not the flat pad.
+  sandbox.songs = [
+    {status:"Solid", low_note:"G2", high_note:"D4"},
+    {status:"Solid", low_note:"A2", high_note:"D5"},
+    {status:"Learning", low_note:"B3", high_note:"F5"},
+  ];
+  const r = sandbox.computeAutoRange();
+  eq(r.stretchHigh, "F5", "Learning song's high note becomes the evidence-based stretch ceiling");
+  eq(r.stretchLow, "E2", "low side still falls back to pad since no Learning/Maybe evidence there");
+}
+{
+  // A Maybe song reaching lower than comfort should set the stretch floor,
+  // and only that side — the high side still falls back to the pad.
+  sandbox.songs = [
+    {status:"Solid", low_note:"G2", high_note:"D4"},
+    {status:"Maybe", low_note:"D2", high_note:"C4"},
+  ];
+  const r = sandbox.computeAutoRange();
+  eq(r.stretchLow, "D2", "Maybe song's low note becomes the evidence-based stretch floor");
+  eq(r.stretchHigh, "F4", "high side still falls back to 3-semitone pad past comfort");
+}
+{
+  // Learning/Maybe notes that fall *inside* comfort shouldn't narrow
+  // stretch below the fallback pad.
+  sandbox.songs = [
+    {status:"Solid", low_note:"G2", high_note:"D4"},
+    {status:"Learning", low_note:"A2", high_note:"C4"}, // entirely inside comfort
+  ];
+  const r = sandbox.computeAutoRange();
+  eq(r.stretchLow, "E2", "in-bounds Learning song doesn't override the fallback pad");
+  eq(r.stretchHigh, "F4", "in-bounds Learning song doesn't override the fallback pad");
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

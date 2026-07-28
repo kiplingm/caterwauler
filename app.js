@@ -1324,14 +1324,29 @@ function computeAutoRange(){
     if(highest == null || highS > highest.semitone) highest = {note: s.high_note, semitone: highS};
   });
   if(!lowest || !highest) return null;
-  // Stretch band extends 3 semitones past the widest comfort span in each
-  // direction — a heuristic default (not derived from data) so "stretch"
-  // fit scoring still means something in auto mode, rather than being a
-  // zero-width band identical to comfort.
+
+  // Stretch zone: rather than a flat assumed pad, look at what you've
+  // actually attempted — Learning (actively working on) and Maybe
+  // (uncertain candidates) songs — and let real evidence set how far
+  // stretch extends past comfort in each direction. Falls back to the old
+  // 3-semitone heuristic only if there's no such evidence yet, so
+  // "stretch" still means something rather than collapsing to comfort's
+  // width.
+  let stretchLowS = lowest.semitone, stretchHighS = highest.semitone;
+  songs.forEach(s => {
+    if(s.status !== "Learning" && s.status !== "Maybe") return;
+    const lowS = noteToSemitone(s.low_note);
+    const highS = noteToSemitone(s.high_note);
+    if(lowS != null && lowS < stretchLowS) stretchLowS = lowS;
+    if(highS != null && highS > stretchHighS) stretchHighS = highS;
+  });
+  if(stretchLowS === lowest.semitone) stretchLowS -= 3;
+  if(stretchHighS === highest.semitone) stretchHighS += 3;
+
   return {
     comfortLow: lowest.note, comfortHigh: highest.note,
-    stretchLow: semitoneToNoteName(lowest.semitone - 3),
-    stretchHigh: semitoneToNoteName(highest.semitone + 3),
+    stretchLow: semitoneToNoteName(stretchLowS),
+    stretchHigh: semitoneToNoteName(stretchHighS),
     count
   };
 }
