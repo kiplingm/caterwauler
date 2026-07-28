@@ -387,6 +387,17 @@ function render(){
       // Most recently added to the songbook first.
       return (b.created_at||"").localeCompare(a.created_at||"");
     }
+    if(sortMode === "challenging"){
+      // Worst fit first (most semitones outside comfort zone). Songs with
+      // no saved range (fit_score === Infinity) still sort to the bottom
+      // here, same as they do for "Best fit" — "challenging" means "hard
+      // but known," not "unknown."
+      const aUnknown = !isFinite(a.fit_score), bUnknown = !isFinite(b.fit_score);
+      if(aUnknown !== bUnknown) return aUnknown ? 1 : -1;
+      if(aUnknown && bUnknown) return (a.title||"").localeCompare(b.title||"");
+      if(a.fit_score !== b.fit_score) return b.fit_score - a.fit_score;
+      return (a.title||"").localeCompare(b.title||"");
+    }
     // fit: best range match first, tie-broken by title
     if(a.fit_score !== b.fit_score) return a.fit_score - b.fit_score;
     return (a.title||"").localeCompare(b.title||"");
