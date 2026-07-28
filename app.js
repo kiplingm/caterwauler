@@ -1699,7 +1699,7 @@ document.getElementById("authSendBtn").onclick = async () => {
   });
 
   btn.disabled = false;
-  btn.textContent = "Send sign-in link";
+  btn.textContent = "Continue";
 
   if(error){
     errEl.textContent = error.message;

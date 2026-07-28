@@ -12,9 +12,11 @@
      stays exactly as it was, just hidden behind this overlay until login. -->
 <div class="sheet-backdrop open" id="authBackdrop"></div>
 <div class="sheet open" id="authSheet">
-  <h2>Sign in</h2>
+  <h2>Sign in or sign up</h2>
   <div class="artist" style="margin-bottom:16px;">
-    Enter your email — we'll send a sign-in link, no password needed.
+    Enter your email — we'll send you a link and code, no password needed.
+    New here? Your account (and your own private songbook) is created
+    automatically the first time you sign in.
   </div>
   <div id="authFormView">
     <div class="field">
@@ -23,11 +25,11 @@
     </div>
     <div id="authError" class="artist" style="display:none; color:#e85d4f; margin-top:6px;"></div>
     <div class="sheet-actions">
-      <button class="btn-save" id="authSendBtn" style="flex:1;">Send sign-in link</button>
+      <button class="btn-save" id="authSendBtn" style="flex:1;">Continue</button>
     </div>
   </div>
   <div id="authSentView" style="display:none;">
-    <div class="artist">Check your email for the link — open it on this device.</div>
+    <div class="artist">Check your email for the link and code — open it on this device.</div>
     <div class="artist" style="margin-top:6px;">
       On iPhone, if you're signing in from a Home Screen icon, tapping the
       link opens regular Safari instead — use the 6-digit code from the
