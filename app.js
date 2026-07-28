@@ -297,11 +297,15 @@ function colorForSemitone(s, colors){
     gapToStretch = Math.max(1, stretchHighS - comfortHighS);
   }
 
+  // Eased (front-loaded) blend so color shifts happen quickly rather than
+  // gradually — matches the punchier transitions from the approved mockup.
+  const ease = t => Math.pow(Math.max(0, Math.min(1, t)), 0.5);
+
   if(distBeyondComfort <= gapToStretch){
-    return lerpColor(colors.green, colors.gold, distBeyondComfort / gapToStretch);
+    return lerpColor(colors.green, colors.gold, ease(distBeyondComfort / gapToStretch));
   }
-  const REDFALLOFF_SEMITONES = 4; // how many semitones past the stretch edge until it's fully red
-  const t = Math.min(1, (distBeyondComfort - gapToStretch) / REDFALLOFF_SEMITONES);
+  const REDFALLOFF_SEMITONES = 2; // how many semitones past the stretch edge until it's fully red
+  const t = ease((distBeyondComfort - gapToStretch) / REDFALLOFF_SEMITONES);
   return lerpColor(colors.gold, colors.red, t);
 }
 
