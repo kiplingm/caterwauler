@@ -1404,7 +1404,6 @@ document.getElementById("rangeModeAutoBtn").onclick = async () => {
 
 document.getElementById("rangeModeManualBtn").onclick = async () => {
   currentRangeMode = "manual";
-  renderRangeModeUI("manual");
 
   // Restore the last manual range if we have one saved; otherwise leave
   // whatever's currently active (e.g. first time ever switching to manual).
@@ -1414,13 +1413,15 @@ document.getElementById("rangeModeManualBtn").onclick = async () => {
     patch.comfort_high = manualComfortHigh;
     patch.stretch_low = manualStretchLow || manualComfortLow;
     patch.stretch_high = manualStretchHigh || manualComfortHigh;
-  }
-
-  const ok = await patchProfile(patch);
-  if(ok && patch.comfort_low){
+    // Apply immediately (before the network round-trip) so the Settings
+    // fields and range bars reflect the restored range right away, not
+    // whatever auto last computed.
     applyRange(patch.comfort_low, patch.comfort_high, patch.stretch_low, patch.stretch_high);
     recomputeFitScores();
   }
+  renderRangeModeUI("manual");
+
+  const ok = await patchProfile(patch);
   showToast(ok
     ? (patch.comfort_low ? "Restored your manual range" : "Switched to manual range")
     : "Saved locally — couldn't reach the server");
