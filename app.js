@@ -32,6 +32,9 @@ const HEADERS = {
 // small, additive change rather than a rewrite of 1000+ lines of working
 // fetch calls.
 const authClient = supabase.createClient(SUPABASE_URL, PUBLISHABLE_KEY);
+// Remembers which address the OTP was sent to, so the code-entry fallback
+// knows which email to verify against without asking the user to retype it.
+let lastAuthEmail = null;
 
 // Vocal range — now loaded per-user from the `profiles` table after
 // sign-in (see loadProfileRange()) instead of hardcoded. These start as
@@ -1702,12 +1705,49 @@ document.getElementById("authSendBtn").onclick = async () => {
     errEl.textContent = error.message;
     errEl.style.display = "block";
   }else{
+    lastAuthEmail = email;
     document.getElementById("authFormView").style.display = "none";
     document.getElementById("authSentView").style.display = "block";
+    document.getElementById("authCode").value = "";
+    document.getElementById("authCodeError").style.display = "none";
   }
 };
 
+// Fallback for the case where tapping the emailed link doesn't land in the
+// same browser/Home-Screen-icon instance that requested it (a known iOS
+// quirk: taps always open regular Safari, not a specific standalone web
+// app instance). Supabase's default OTP email includes a 6-digit code
+// alongside the link — verifying it directly here sidesteps the redirect
+// entirely and completes sign-in in whichever instance you're actually in.
+document.getElementById("authVerifyCodeBtn").onclick = async () => {
+  const code = document.getElementById("authCode").value.trim();
+  const codeErrEl = document.getElementById("authCodeError");
+  codeErrEl.style.display = "none";
+  if(!code || !lastAuthEmail) return;
+
+  const btn = document.getElementById("authVerifyCodeBtn");
+  btn.disabled = true;
+  btn.textContent = "Verifying…";
+
+  const { error } = await authClient.auth.verifyOtp({
+    email: lastAuthEmail,
+    token: code,
+    type: "email"
+  });
+
+  btn.disabled = false;
+  btn.textContent = "Verify code";
+
+  if(error){
+    codeErrEl.textContent = error.message;
+    codeErrEl.style.display = "block";
+  }
+  // On success, onAuthStateChange (registered below) picks up the new
+  // session and calls onSignedIn() automatically — no extra handling needed.
+};
+
 document.getElementById("authUseDifferentBtn").onclick = () => {
+  lastAuthEmail = null;
   document.getElementById("authFormView").style.display = "block";
   document.getElementById("authSentView").style.display = "none";
 };

@@ -28,7 +28,20 @@
   </div>
   <div id="authSentView" style="display:none;">
     <div class="artist">Check your email for the link — open it on this device.</div>
+    <div class="artist" style="margin-top:6px;">
+      On iPhone, if you're signing in from a Home Screen icon, tapping the
+      link opens regular Safari instead — use the 6-digit code from the
+      same email instead so it stays in this instance.
+    </div>
+    <div class="field" style="margin-top:14px;">
+      <label>6-DIGIT CODE</label>
+      <input type="text" id="authCode" placeholder="123456" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" maxlength="6">
+    </div>
+    <div id="authCodeError" class="artist" style="display:none; color:#e85d4f; margin-top:6px;"></div>
     <div class="sheet-actions">
+      <button class="btn-save" id="authVerifyCodeBtn" style="flex:1;">Verify code</button>
+    </div>
+    <div class="sheet-actions" style="margin-top:8px;">
       <button class="btn-cancel" id="authUseDifferentBtn" style="flex:1;">Use a different email</button>
     </div>
   </div>
