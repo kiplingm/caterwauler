@@ -10,6 +10,12 @@
     --cream-dim: #b6a99a;
     --red: #e8615a;
     --green: #6fbf73;
+    /* Brighter, more saturated variants used only by the range-bar gradient —
+       kept separate from --green/--gold/--red so status pills and other UI
+       elements stay on the softer theme palette. */
+    --grad-green: #3ddc84;
+    --grad-gold: #ffc93c;
+    --grad-red: #ff4d4f;
   }
   body[data-theme="rust"]{
     --bg: #1a1512;
@@ -21,6 +27,9 @@
     --cream-dim: #b3a48c;
     --red: #cc5c4a;
     --green: #8fae5f;
+    --grad-green: #a8d977;
+    --grad-gold: #f2934a;
+    --grad-red: #e8735c;
   }
   body[data-theme="cassette"]{
     --bg: #141a2e;
@@ -32,6 +41,9 @@
     --cream-dim: #9aa6c9;
     --red: #ff5d5d;
     --green: #52e0a1;
+    --grad-green: #52e0a1;
+    --grad-gold: #ff5da2;
+    --grad-red: #ff5d5d;
   }
   body[data-theme="contrast"]{
     --bg: #000000;
@@ -43,6 +55,9 @@
     --cream-dim: #dddddd;
     --red: #ff453a;
     --green: #30ff5e;
+    --grad-green: #30ff5e;
+    --grad-gold: #ffe600;
+    --grad-red: #ff453a;
   }
   body[data-theme="contrast"] .card,
   body[data-theme="contrast"] input,

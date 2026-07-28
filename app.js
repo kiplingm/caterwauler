@@ -263,17 +263,19 @@ function transpositionMessage(lowS, highS){
   return `Try shifting ${dir} ${Math.abs(shift)} semitone${Math.abs(shift)===1?"":"s"} (${newLow}–${newHigh}) for ${zoneLabel}.`;
 }
 
-// Reads the active theme's green/gold/red as RGB triples so the gradient
-// always matches whichever color scheme is currently selected.
+// Reads the active theme's brighter gradient-only colors as RGB triples,
+// so the range bar stays punchy/saturated regardless of which theme is
+// selected, independent of the softer --green/--gold/--red used by status
+// pills and badges elsewhere in the UI.
 function getFitColors(){
   const style = getComputedStyle(document.body);
   const parse = varName => {
     const hex = style.getPropertyValue(varName).trim();
     const m = hex.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
-    if(!m) return [111,191,115]; // fallback green
+    if(!m) return [61,220,132]; // fallback bright green
     return [parseInt(m[1],16), parseInt(m[2],16), parseInt(m[3],16)];
   };
-  return { green: parse("--green"), gold: parse("--gold"), red: parse("--red") };
+  return { green: parse("--grad-green"), gold: parse("--grad-gold"), red: parse("--grad-red") };
 }
 
 function lerpColor(a, b, t){
