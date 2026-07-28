@@ -45,6 +45,12 @@ let STRETCH_LOW = "G2", STRETCH_HIGH = "D5";
 // 'auto' (derived from Solid-status songs) or 'manual' (typed in directly).
 // Shared with the other karaoke-app project via the same profiles row.
 let currentRangeMode = "manual";
+// The last range the user typed in manually, kept separate from
+// COMFORT_LOW/HIGH etc. above so that switching to auto (which overwrites
+// those active values) doesn't lose it — switching back to manual restores
+// from these instead of leaving whatever auto last computed.
+let manualComfortLow = null, manualComfortHigh = null;
+let manualStretchLow = null, manualStretchHigh = null;
 
 const NOTE_VALUES = {C:0,"C#":1,DB:1,D:2,"D#":3,EB:3,E:4,F:5,"F#":6,GB:6,G:7,"G#":8,AB:8,A:9,"A#":10,BB:10,B:11};
 
@@ -1399,7 +1405,25 @@ document.getElementById("rangeModeAutoBtn").onclick = async () => {
 document.getElementById("rangeModeManualBtn").onclick = async () => {
   currentRangeMode = "manual";
   renderRangeModeUI("manual");
-  await patchProfile({ range_mode: "manual" });
+
+  // Restore the last manual range if we have one saved; otherwise leave
+  // whatever's currently active (e.g. first time ever switching to manual).
+  const patch = { range_mode: "manual" };
+  if(manualComfortLow && manualComfortHigh){
+    patch.comfort_low = manualComfortLow;
+    patch.comfort_high = manualComfortHigh;
+    patch.stretch_low = manualStretchLow || manualComfortLow;
+    patch.stretch_high = manualStretchHigh || manualComfortHigh;
+  }
+
+  const ok = await patchProfile(patch);
+  if(ok && patch.comfort_low){
+    applyRange(patch.comfort_low, patch.comfort_high, patch.stretch_low, patch.stretch_high);
+    recomputeFitScores();
+  }
+  showToast(ok
+    ? (patch.comfort_low ? "Restored your manual range" : "Switched to manual range")
+    : "Saved locally — couldn't reach the server");
 };
 
 document.getElementById("saveRangeBtn").onclick = async () => {
@@ -1420,9 +1444,15 @@ document.getElementById("saveRangeBtn").onclick = async () => {
     comfort_high: newComfortHigh,
     stretch_low: useStretchLow,
     stretch_high: useStretchHigh,
-    range_mode: "manual"
+    range_mode: "manual",
+    manual_comfort_low: newComfortLow,
+    manual_comfort_high: newComfortHigh,
+    manual_stretch_low: useStretchLow,
+    manual_stretch_high: useStretchHigh
   });
   if(ok){
+    manualComfortLow = newComfortLow; manualComfortHigh = newComfortHigh;
+    manualStretchLow = useStretchLow; manualStretchHigh = useStretchHigh;
     applyRange(newComfortLow, newComfortHigh, useStretchLow, useStretchHigh);
     recomputeFitScores();
     showToast("Range saved");
@@ -1670,6 +1700,11 @@ async function loadProfileRange(userId){
     if(!profile) return;
 
     currentRangeMode = profile.range_mode === "auto" ? "auto" : "manual";
+
+    manualComfortLow = profile.manual_comfort_low || null;
+    manualComfortHigh = profile.manual_comfort_high || null;
+    manualStretchLow = profile.manual_stretch_low || null;
+    manualStretchHigh = profile.manual_stretch_high || null;
 
     if(profile.comfort_low && profile.comfort_high){
       applyRange(
