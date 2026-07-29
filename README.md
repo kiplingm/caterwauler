@@ -48,3 +48,6 @@ node tests.js
   an `is_admin` flag (or admin allowlist) plus an impersonation flow that
   respects the existing per-user RLS policies rather than bypassing them
   outright.
+- Shazam-style song ID: let a user record/hum a snippet (or point at a
+  live speaker) to identify a song and jump straight to adding/rating it
+  in the songbook, instead of manual search entry.
