@@ -290,45 +290,21 @@ function lerpColor(a, b, t){
   return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
 }
 
-// Maps a semitone position to a color: pure green inside the comfort zone,
-// fading to gold across the gap between comfort and stretch, then fading
-// further to red the farther a note sits past the stretch zone.
-function colorForSemitone(s, colors){
-  if(s >= comfortLowS && s <= comfortHighS) return lerpColor(colors.green, colors.green, 0);
-
-  let distBeyondComfort, gapToStretch;
-  if(s < comfortLowS){
-    distBeyondComfort = comfortLowS - s;
-    gapToStretch = Math.max(1, comfortLowS - stretchLowS);
-  } else {
-    distBeyondComfort = s - comfortHighS;
-    gapToStretch = Math.max(1, stretchHighS - comfortHighS);
-  }
-
-  // Eased (front-loaded) blend so color shifts happen quickly rather than
-  // gradually — matches the punchier transitions from the approved mockup.
-  const ease = t => Math.pow(Math.max(0, Math.min(1, t)), 0.5);
-
-  if(distBeyondComfort <= gapToStretch){
-    return lerpColor(colors.green, colors.gold, ease(distBeyondComfort / gapToStretch));
-  }
-  const REDFALLOFF_SEMITONES = 2; // how many semitones past the stretch edge until it's fully red
-  const t = ease((distBeyondComfort - gapToStretch) / REDFALLOFF_SEMITONES);
-  return lerpColor(colors.gold, colors.red, t);
-}
-
-// Builds a left-to-right CSS gradient across a song's own low→high span,
-// sampling one color stop per semitone so the bar visually shows exactly
-// which notes are comfortable vs. risky.
-function rangeGradient(lowS, highS){
-  const colors = getFitColors();
-  if(lowS === highS) return colorForSemitone(lowS, colors);
-  const stops = [];
-  for(let s = lowS; s <= highS; s++){
-    const pctLocal = ((s - lowS) / (highS - lowS)) * 100;
-    stops.push(`${colorForSemitone(s, colors)} ${pctLocal.toFixed(1)}%`);
-  }
-  return `linear-gradient(to right, ${stops.join(", ")})`;
+// Builds the fixed background gradient for the range track: a saturated
+// "range finder" overlay that is red at the outer edges (beyond stretch),
+// gold across the stretch-only zone, and green across the comfort zone.
+// Position is the same on every card since it's derived from the user's
+// comfort/stretch settings, not from any individual song.
+function buildRangeOverlay(comfortLeft, comfortRight, stretchLeft, stretchRight){
+  const c = getFitColors();
+  const rgba = (rgb, a) => `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;
+  return `linear-gradient(90deg,
+    ${rgba(c.red,0.32)} 0%,
+    ${rgba(c.gold,0.24)} ${stretchLeft}%,
+    ${rgba(c.green,0.16)} ${comfortLeft}%,
+    ${rgba(c.green,0.16)} ${comfortRight}%,
+    ${rgba(c.gold,0.24)} ${stretchRight}%,
+    ${rgba(c.red,0.32)} 100%)`;
 }
 
 function renderRangeStrip(low, high, rangeSource){
@@ -338,12 +314,14 @@ function renderRangeStrip(low, high, rangeSource){
   const pct = v => Math.max(0, Math.min(100, ((v - spanLow)/span)*100));
 
   const comfortLeft = pct(comfortLowS), comfortRight = pct(comfortHighS);
-  let songBar = "";
+  const stretchLeft = pct(stretchLowS), stretchRight = pct(stretchHighS);
+  const overlay = buildRangeOverlay(comfortLeft, comfortRight, stretchLeft, stretchRight);
+
+  let songLine = "";
   if(lowS!==null && highS!==null){
     const l = pct(lowS), r = pct(highS);
     const width = Math.max(r-l, 2.5);
-    const gradient = rangeGradient(lowS, highS);
-    songBar = `<div class="range-song" style="left:${l}%; width:${width}%; background:${gradient};"></div>`;
+    songLine = `<div class="range-song-line" style="left:${l}%; width:${width}%;"></div>`;
   }
   const fit = fitLabel(lowS, highS);
   const suggestionHtml = fit.cls === "fit-out"
@@ -357,8 +335,10 @@ function renderRangeStrip(low, high, rangeSource){
   return `
     <div class="range-strip">
       <div class="range-track">
-        <div class="range-comfort" style="left:${comfortLeft}%; width:${comfortRight-comfortLeft}%;"></div>
-        ${songBar}
+        <div class="range-overlay" style="background:${overlay};"></div>
+        <div class="range-bound" style="left:${comfortLeft}%;"></div>
+        <div class="range-bound" style="left:${comfortRight}%;"></div>
+        ${songLine}
       </div>
       <div class="range-labels"><span>${STRETCH_LOW}</span><span>${STRETCH_HIGH}</span></div>
       <div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${sourceTag}${suggestionHtml}</div>

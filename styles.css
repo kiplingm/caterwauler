@@ -193,11 +193,15 @@
 
   .range-strip{margin-top:12px;}
   .range-track{
-    position:relative; height:10px; border-radius:6px; background:var(--bg);
-    border:1px solid var(--line);
+    position:relative; height:26px; border-radius:8px; background:#0d0f12;
+    border:1px solid var(--line); overflow:hidden;
   }
-  .range-comfort{position:absolute; top:0; bottom:0; background:rgba(61,218,215,0.18); border-left:1px solid var(--teal); border-right:1px solid var(--teal);}
-  .range-song{position:absolute; top:-3px; height:16px; border-radius:5px; box-shadow:0 1px 4px rgba(0,0,0,0.4);}
+  .range-overlay{position:absolute; inset:0; pointer-events:none;}
+  .range-bound{position:absolute; top:2px; bottom:2px; width:1px; background:var(--cream); opacity:0.3; z-index:2;}
+  .range-song-line{
+    position:absolute; top:50%; height:3px; margin-top:-1.5px; border-radius:1.5px;
+    background:var(--teal); box-shadow:0 0 8px var(--teal), 0 0 16px var(--teal); z-index:3;
+  }
   .range-labels{display:flex; justify-content:space-between; font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:var(--cream-dim); margin-top:5px;}
   .range-fit{font-family:'IBM Plex Mono',monospace; font-size:10px; margin-top:4px;}
   .fit-easy{color:var(--green);} .fit-stretch{color:var(--gold);} .fit-out{color:var(--red);} .fit-unknown{color:var(--cream-dim);}
