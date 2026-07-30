@@ -175,13 +175,35 @@ async function askClaude(promptText, boxEl){
   window.open("https://claude.ai/new", "_blank");
 }
 
+// Strips connective words ("the", "and", "n") and non-alphanumeric characters,
+// so naming variants that are really the same song/artist compare equal:
+// "The Rolling Stones" vs "Rolling Stones", "Hall & Oates" vs "Hall and
+// Oates", "Rock 'n' Roll" vs "Rock and Roll".
+function coreTokens(str){
+  return (str || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter(tok => tok !== "the" && tok !== "and" && tok !== "n");
+}
+function lenientKey(title, artist){
+  return `${coreTokens(title).join(" ")}|${coreTokens(artist).join(" ")}`;
+}
+
 // Looks up which of the given songs (by normalized title+artist) exist in
 // the shared 84k-song karafun_catalog table, so the songbook can flag them
-// with a "K" badge. Batched by normalized title to keep query URLs short;
-// artist is matched exactly on the client afterward to avoid false positives
-// from same-titled songs by other artists.
+// with a "K" badge.
+//
+// Two passes:
+//  1. Fast exact match on the DB's own title_normalized column (cheap — one
+//     "in" query per 50 titles).
+//  2. Lenient fallback for anything pass 1 missed: search KaraFun by artist
+//     (ignoring connector words), then confirm the title also matches once
+//     connectors are ignored on both sides. Both title and artist core
+//     tokens must match, so this doesn't flag unrelated same-titled songs.
 async function fetchKarafunMatches(songList){
-  const matchSet = new Set();
+  const exactMatchSet = new Set();
   const titles = [...new Set(songList.map(s => normalizeForMatch(s.title)).filter(Boolean))];
   const CHUNK_SIZE = 50;
   for(let i = 0; i < titles.length; i += CHUNK_SIZE){
@@ -194,12 +216,76 @@ async function fetchKarafunMatches(songList){
       );
       if(!res.ok) continue;
       const rows = await res.json();
-      rows.forEach(r => matchSet.add(`${r.title_normalized}|${r.artist_normalized}`));
+      rows.forEach(r => exactMatchSet.add(`${r.title_normalized}|${r.artist_normalized}`));
     }catch(e){
-      // Badge just won't show for this chunk — non-critical.
+      // Non-critical — this chunk falls through to the lenient pass below.
     }
   }
-  return matchSet;
+
+  const resolvedKeys = new Set();
+  const unresolved = [];
+  songList.forEach(s=>{
+    const key = `${normalizeForMatch(s.title)}|${normalizeForMatch(s.artist)}`;
+    if(exactMatchSet.has(key)) resolvedKeys.add(key);
+    else unresolved.push(s);
+  });
+
+  const ARTIST_CHUNK = 8;
+  const uniqueArtists = [...new Set(unresolved.map(s => s.artist).filter(Boolean))];
+
+  const checkCandidates = (rows, songsToCheck) => {
+    const candidateKeys = new Set(rows.map(r => lenientKey(r.title, r.artist)));
+    songsToCheck.forEach(s=>{
+      const key = `${normalizeForMatch(s.title)}|${normalizeForMatch(s.artist)}`;
+      if(resolvedKeys.has(key)) return;
+      if(candidateKeys.has(lenientKey(s.title, s.artist))) resolvedKeys.add(key);
+    });
+  };
+
+  for(let i = 0; i < uniqueArtists.length; i += ARTIST_CHUNK){
+    const chunk = uniqueArtists.slice(i, i + ARTIST_CHUNK);
+    // Postgrest OR syntax needs literal commas between conditions, so artists
+    // containing a comma (rare) are looked up individually below instead.
+    const batchable = chunk.filter(a => !a.includes(","));
+    const skipped = chunk.filter(a => a.includes(","));
+
+    if(batchable.length > 0){
+      const orClause = batchable
+        .map(a => {
+          const tokens = coreTokens(a);
+          const pattern = tokens.length ? tokens.join("*") : a.toLowerCase();
+          return `artist.ilike.${encodeURIComponent(`*${pattern}*`)}`;
+        })
+        .join(",");
+      try{
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/karafun_catalog?select=title,artist&or=(${orClause})&limit=500`,
+          {headers: HEADERS}
+        );
+        if(res.ok){
+          const rows = await res.json();
+          checkCandidates(rows, unresolved.filter(s => batchable.includes(s.artist)));
+        }
+      }catch(e){ /* non-critical */ }
+    }
+
+    for(const artist of skipped){
+      const tokens = coreTokens(artist);
+      const pattern = tokens.length ? tokens.join("*") : artist.toLowerCase();
+      try{
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/karafun_catalog?select=title,artist&artist=ilike.${encodeURIComponent(`*${pattern}*`)}&limit=100`,
+          {headers: HEADERS}
+        );
+        if(res.ok){
+          const rows = await res.json();
+          checkCandidates(rows, unresolved.filter(s => s.artist === artist));
+        }
+      }catch(e){ /* non-critical */ }
+    }
+  }
+
+  return resolvedKeys;
 }
 
 async function fetchSongs(){
