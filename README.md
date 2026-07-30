@@ -91,3 +91,14 @@ after a deploy, silently undoing whatever just shipped.
 - Shazam-style song ID: let a user record/hum a snippet (or point at a
   live speaker) to identify a song and jump straight to adding/rating it
   in the songbook, instead of manual search entry.
+- Recs sheet (`openRecommendations` in `app.js`) still does the old
+  sequential-ish chunked candidate search against `karafun_catalog` for
+  *new* song suggestions — this is a live search so it wasn't touched by
+  the `in_karafun` trigger work, but it'd benefit from the same
+  Promise.all-parallelized chunking pattern used in the old
+  `fetchKarafunMatches` if opening the Recs sheet ever feels slow.
+- Add an index on `songs.user_id` if the table grows a lot — fine at
+  current scale (~200 rows total across users) but not indexed today.
+- Once on the Dell XPS: revisit the parked automated vocal-range
+  extraction pipeline (yt-dlp + Demucs + CREPE/pYIN) — a better use of
+  local compute than further Supabase micro-optimization.
