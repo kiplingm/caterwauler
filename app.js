@@ -175,6 +175,33 @@ async function askClaude(promptText, boxEl){
   window.open("https://claude.ai/new", "_blank");
 }
 
+// Looks up which of the given songs (by normalized title+artist) exist in
+// the shared 84k-song karafun_catalog table, so the songbook can flag them
+// with a "K" badge. Batched by normalized title to keep query URLs short;
+// artist is matched exactly on the client afterward to avoid false positives
+// from same-titled songs by other artists.
+async function fetchKarafunMatches(songList){
+  const matchSet = new Set();
+  const titles = [...new Set(songList.map(s => normalizeForMatch(s.title)).filter(Boolean))];
+  const CHUNK_SIZE = 50;
+  for(let i = 0; i < titles.length; i += CHUNK_SIZE){
+    const chunk = titles.slice(i, i + CHUNK_SIZE);
+    const inClause = chunk.map(t => `"${t}"`).join(",");
+    try{
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/karafun_catalog?select=title_normalized,artist_normalized&title_normalized=in.(${inClause})`,
+        {headers: HEADERS}
+      );
+      if(!res.ok) continue;
+      const rows = await res.json();
+      rows.forEach(r => matchSet.add(`${r.title_normalized}|${r.artist_normalized}`));
+    }catch(e){
+      // Badge just won't show for this chunk — non-critical.
+    }
+  }
+  return matchSet;
+}
+
 async function fetchSongs(){
   try{
     const res = await fetch(
@@ -183,6 +210,7 @@ async function fetchSongs(){
     );
     if(!res.ok) throw new Error("Fetch failed: " + res.status);
     const raw = await res.json();
+    const karafunSet = await fetchKarafunMatches(raw);
     songs = raw.map(s => {
       const dates = (s.performances || [])
         .map(p => p.performance_date)
@@ -191,7 +219,8 @@ async function fetchSongs(){
       return {
         ...s,
         last_played: dates.length ? dates[dates.length-1] : null,
-        fit_score: fitScore(s.low_note, s.high_note)
+        fit_score: fitScore(s.low_note, s.high_note),
+        in_karafun: karafunSet.has(`${normalizeForMatch(s.title)}|${normalizeForMatch(s.artist)}`)
       };
     });
     render();
@@ -406,7 +435,7 @@ function render(){
     <div class="card" data-id="${s.id}">
       <div class="card-top">
         <div>
-          <div class="title">${escapeHtml(s.title)}</div>
+          <div class="title">${escapeHtml(s.title)}${s.in_karafun ? `<span class="karafun-badge" title="In the KaraFun catalog">K</span>` : ""}</div>
           <div class="artist">${escapeHtml(s.artist)}</div>
         </div>
         ${editingStatusId === s.id ? `
