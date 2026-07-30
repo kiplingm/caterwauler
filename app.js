@@ -2,8 +2,8 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "9";
-const BUILD_DATE = "2026-07-30T06:51:53-07:00";
+const BUILD_VERSION = "10";
+const BUILD_DATE = "2026-07-30T09:01:05-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
 if(buildInfoEl){
@@ -202,30 +202,56 @@ function lenientKey(title, artist){
 //     (ignoring connector words), then confirm the title also matches once
 //     connectors are ignored on both sides. Both title and artist core
 //     tokens must match, so this doesn't flag unrelated same-titled songs.
+// Once a song's karafun status (in the catalog or not) has been resolved,
+// it's cached here for the rest of the session — the catalog doesn't
+// change mid-session, so there's no reason to re-run the exact/lenient
+// match pipeline for a song we already checked. fetchSongs() runs after
+// almost every mutation (status change, add, edit, dismiss…), so this is
+// what keeps those re-fetches fast instead of re-scanning the whole
+// songbook against the catalog every time.
+const karafunMatchCache = new Map(); // normalized "title|artist" -> boolean
+
 async function fetchKarafunMatches(songList){
+  const keyOf = s => `${normalizeForMatch(s.title)}|${normalizeForMatch(s.artist)}`;
+  const resolvedKeys = new Set();
+  const toCheck = [];
+  songList.forEach(s=>{
+    const key = keyOf(s);
+    if(karafunMatchCache.has(key)){
+      if(karafunMatchCache.get(key)) resolvedKeys.add(key);
+    }else{
+      toCheck.push(s);
+    }
+  });
+  if(toCheck.length === 0) return resolvedKeys;
+
   const exactMatchSet = new Set();
-  const titles = [...new Set(songList.map(s => normalizeForMatch(s.title)).filter(Boolean))];
+  const titles = [...new Set(toCheck.map(s => normalizeForMatch(s.title)).filter(Boolean))];
   const CHUNK_SIZE = 50;
-  for(let i = 0; i < titles.length; i += CHUNK_SIZE){
-    const chunk = titles.slice(i, i + CHUNK_SIZE);
+  const titleChunks = [];
+  for(let i = 0; i < titles.length; i += CHUNK_SIZE) titleChunks.push(titles.slice(i, i + CHUNK_SIZE));
+
+  // Independent chunks, so fire them all at once instead of awaiting one
+  // at a time — the sequential version was paying full network round-trip
+  // latency per chunk instead of overlapping them.
+  await Promise.all(titleChunks.map(async chunk => {
     const inClause = chunk.map(t => `"${t}"`).join(",");
     try{
       const res = await fetch(
         `${SUPABASE_URL}/rest/v1/karafun_catalog?select=title_normalized,artist_normalized&title_normalized=in.(${inClause})`,
         {headers: HEADERS}
       );
-      if(!res.ok) continue;
+      if(!res.ok) return;
       const rows = await res.json();
       rows.forEach(r => exactMatchSet.add(`${r.title_normalized}|${r.artist_normalized}`));
     }catch(e){
       // Non-critical — this chunk falls through to the lenient pass below.
     }
-  }
+  }));
 
-  const resolvedKeys = new Set();
   const unresolved = [];
-  songList.forEach(s=>{
-    const key = `${normalizeForMatch(s.title)}|${normalizeForMatch(s.artist)}`;
+  toCheck.forEach(s=>{
+    const key = keyOf(s);
     if(exactMatchSet.has(key)) resolvedKeys.add(key);
     else unresolved.push(s);
   });
@@ -236,18 +262,22 @@ async function fetchKarafunMatches(songList){
   const checkCandidates = (rows, songsToCheck) => {
     const candidateKeys = new Set(rows.map(r => lenientKey(r.title, r.artist)));
     songsToCheck.forEach(s=>{
-      const key = `${normalizeForMatch(s.title)}|${normalizeForMatch(s.artist)}`;
+      const key = keyOf(s);
       if(resolvedKeys.has(key)) return;
       if(candidateKeys.has(lenientKey(s.title, s.artist))) resolvedKeys.add(key);
     });
   };
 
-  for(let i = 0; i < uniqueArtists.length; i += ARTIST_CHUNK){
-    const chunk = uniqueArtists.slice(i, i + ARTIST_CHUNK);
+  const artistChunks = [];
+  for(let i = 0; i < uniqueArtists.length; i += ARTIST_CHUNK) artistChunks.push(uniqueArtists.slice(i, i + ARTIST_CHUNK));
+
+  await Promise.all(artistChunks.map(async chunk => {
     // Postgrest OR syntax needs literal commas between conditions, so artists
     // containing a comma (rare) are looked up individually below instead.
     const batchable = chunk.filter(a => !a.includes(","));
     const skipped = chunk.filter(a => a.includes(","));
+
+    const jobs = [];
 
     if(batchable.length > 0){
       const orClause = batchable
@@ -257,33 +287,46 @@ async function fetchKarafunMatches(songList){
           return `artist.ilike.${encodeURIComponent(`*${pattern}*`)}`;
         })
         .join(",");
-      try{
-        const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/karafun_catalog?select=title,artist&or=(${orClause})&limit=500`,
-          {headers: HEADERS}
-        );
-        if(res.ok){
-          const rows = await res.json();
-          checkCandidates(rows, unresolved.filter(s => batchable.includes(s.artist)));
-        }
-      }catch(e){ /* non-critical */ }
+      jobs.push((async () => {
+        try{
+          const res = await fetch(
+            `${SUPABASE_URL}/rest/v1/karafun_catalog?select=title,artist&or=(${orClause})&limit=500`,
+            {headers: HEADERS}
+          );
+          if(res.ok){
+            const rows = await res.json();
+            checkCandidates(rows, unresolved.filter(s => batchable.includes(s.artist)));
+          }
+        }catch(e){ /* non-critical */ }
+      })());
     }
 
-    for(const artist of skipped){
+    skipped.forEach(artist => {
       const tokens = coreTokens(artist);
       const pattern = tokens.length ? tokens.join("*") : artist.toLowerCase();
-      try{
-        const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/karafun_catalog?select=title,artist&artist=ilike.${encodeURIComponent(`*${pattern}*`)}&limit=100`,
-          {headers: HEADERS}
-        );
-        if(res.ok){
-          const rows = await res.json();
-          checkCandidates(rows, unresolved.filter(s => s.artist === artist));
-        }
-      }catch(e){ /* non-critical */ }
-    }
-  }
+      jobs.push((async () => {
+        try{
+          const res = await fetch(
+            `${SUPABASE_URL}/rest/v1/karafun_catalog?select=title,artist&artist=ilike.${encodeURIComponent(`*${pattern}*`)}&limit=100`,
+            {headers: HEADERS}
+          );
+          if(res.ok){
+            const rows = await res.json();
+            checkCandidates(rows, unresolved.filter(s => s.artist === artist));
+          }
+        }catch(e){ /* non-critical */ }
+      })());
+    });
+
+    await Promise.all(jobs);
+  }));
+
+  // Cache every song we just checked (both hits and misses) so future
+  // fetchSongs() calls this session don't redo the work for it.
+  toCheck.forEach(s=>{
+    const key = keyOf(s);
+    karafunMatchCache.set(key, resolvedKeys.has(key));
+  });
 
   return resolvedKeys;
 }
