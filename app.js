@@ -2,8 +2,8 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "5";
-const BUILD_DATE = "2026-07-29T18:37:14-07:00";
+const BUILD_VERSION = "6";
+const BUILD_DATE = "2026-07-29T18:45:00-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
 if(buildInfoEl){
@@ -1313,20 +1313,68 @@ function renderSetlistsList(){
           <div class="setlist-item-title">${escapeHtml(sl.name)}</div>
           <div class="setlist-item-meta">${escapeHtml(metaParts.join(" · "))}</div>
         </div>
-        <button class="rec-dismiss-btn setlist-delete-btn" data-id="${sl.id}">Delete</button>
+        <div class="setlist-item-actions">
+          <button class="rec-dismiss-btn setlist-dup-btn" data-id="${sl.id}">Duplicate</button>
+          <button class="rec-dismiss-btn setlist-delete-btn" data-id="${sl.id}">Delete</button>
+        </div>
       </div>
     `;
   }).join("");
 
   listEl.querySelectorAll(".setlist-item").forEach(el=>{
     el.onclick = (e) => {
-      if(e.target.closest(".setlist-delete-btn")) return;
+      if(e.target.closest(".setlist-delete-btn") || e.target.closest(".setlist-dup-btn")) return;
       openSetlistDetail(el.dataset.id);
     };
+  });
+  listEl.querySelectorAll(".setlist-dup-btn").forEach(b=>{
+    b.onclick = (e) => { e.stopPropagation(); duplicateSetlist(b.dataset.id); };
   });
   listEl.querySelectorAll(".setlist-delete-btn").forEach(b=>{
     b.onclick = (e) => { e.stopPropagation(); deleteSetlist(b.dataset.id); };
   });
+}
+
+async function duplicateSetlist(id){
+  const source = setlists.find(s => s.id === id);
+  if(!source) return;
+  try{
+    const createRes = await fetch(`${SUPABASE_URL}/rest/v1/setlists`, {
+      method:"POST", headers:{...HEADERS, "Prefer":"return=representation"},
+      body: JSON.stringify({
+        name: `${source.name} (copy)`,
+        // Gig date is intentionally left blank on the copy — a duplicate
+        // is normally being reused for a *different* date, and carrying
+        // the old one over is more likely to be wrong than right.
+        gig_date: null,
+        venue: source.venue || null,
+        notes: source.notes || null
+      })
+    });
+    if(!createRes.ok) throw new Error("Duplicate failed");
+    const created = (await createRes.json())[0];
+
+    const songsRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/setlist_songs?setlist_id=eq.${id}&select=song_id,position&order=position.asc`,
+      {headers: HEADERS}
+    );
+    if(!songsRes.ok) throw new Error("Couldn't copy songs");
+    const rows = await songsRes.json();
+    if(rows.length > 0){
+      const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/setlist_songs`, {
+        method:"POST", headers: HEADERS,
+        body: JSON.stringify(rows.map(r => ({
+          setlist_id: created.id, song_id: r.song_id, position: r.position
+        })))
+      });
+      if(!insertRes.ok) throw new Error("Couldn't copy songs");
+    }
+
+    showToast(`Duplicated as "${created.name}"`);
+    await fetchSetlists();
+  }catch(err){
+    showToast("Error: " + err.message);
+  }
 }
 
 async function deleteSetlist(id, opts={}){
