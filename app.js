@@ -2,8 +2,8 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "6";
-const BUILD_DATE = "2026-07-29T18:45:00-07:00";
+const BUILD_VERSION = "7";
+const BUILD_DATE = "2026-07-29T18:46:07-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
 if(buildInfoEl){
@@ -1059,6 +1059,75 @@ async function tryAutoFillRange(title, artist){
   }
 }
 
+// Builds the ranked list of artists to search the catalog for, in three
+// tiers: solid (your own proven artists — highest weight/cap), genre
+// (other artists already in your songbook sharing a genre tag with a
+// Solid song), and similar (Last.fm's real similar-artist data for your
+// top Solid artists, only if a key is saved in Settings). Each entry
+// carries a `label` used directly in the UI and a `cap` limiting how many
+// catalog songs from that artist get pulled in, since genre/similar
+// matches are hunches and shouldn't crowd out proven-artist results.
+async function buildSeedArtists(solidSongs){
+  const seeds = [];
+  const seenArtistKeys = new Set();
+
+  const artistCounts = {};
+  solidSongs.forEach(s=>{
+    const a = (s.artist || "").trim();
+    if(a) artistCounts[a] = (artistCounts[a] || 0) + 1;
+  });
+  const solidArtistNames = Object.keys(artistCounts).sort((a, b) => artistCounts[b] - artistCounts[a]);
+  solidArtistNames.forEach(name=>{
+    seeds.push({name, type:"solid", cap:10, label:`Because you're solid on ${name}`});
+    seenArtistKeys.add(name.toLowerCase());
+  });
+
+  // Genre neighbors: other artists already in the songbook (any status
+  // but Retired) sharing a genre tag with a Solid song.
+  const solidGenres = new Set(solidSongs.map(s => (s.genre||"").trim().toLowerCase()).filter(Boolean));
+  if(solidGenres.size > 0){
+    songs.forEach(s=>{
+      if(s.status === "Retired") return;
+      const genre = (s.genre||"").trim();
+      const artist = (s.artist||"").trim();
+      const genreLower = genre.toLowerCase();
+      if(!genre || !artist || !solidGenres.has(genreLower)) return;
+      if(seenArtistKeys.has(artist.toLowerCase())) return;
+      seenArtistKeys.add(artist.toLowerCase());
+      const buddy = solidSongs.find(ss => (ss.genre||"").trim().toLowerCase() === genreLower);
+      seeds.push({
+        name: artist, type:"genre", cap:4,
+        label: buddy ? `${genre} — like your ${buddy.artist}` : `Also tagged ${genre}`
+      });
+    });
+  }
+
+  // Last.fm similar artists — optional, only runs if a key is saved.
+  const lastfmKey = loadLastfmKey();
+  if(lastfmKey && solidArtistNames.length > 0){
+    const topArtists = solidArtistNames.slice(0, 8); // cap calls, heaviest hitters first
+    for(const artist of topArtists){
+      try{
+        const url = `https://ws.audioscrobbler.com/2.0/?method=artist.getsimilar&artist=${encodeURIComponent(artist)}&api_key=${encodeURIComponent(lastfmKey)}&format=json&limit=5`;
+        const res = await fetch(url);
+        if(!res.ok) continue;
+        const data = await res.json();
+        const matches = (data.similarartists && data.similarartists.artist) || [];
+        matches.forEach(m=>{
+          const name = (m.name || "").trim();
+          if(!name || seenArtistKeys.has(name.toLowerCase())) return;
+          seenArtistKeys.add(name.toLowerCase());
+          seeds.push({name, type:"similar", cap:4, label:`Similar to ${artist} (Last.fm)`});
+        });
+      }catch(e){
+        // A Last.fm hiccup shouldn't block genre/solid recommendations.
+      }
+    }
+  }
+
+  return seeds;
+}
+
 async function openRecommendations(){
   recBackdrop.classList.add("open");
   recSheet.classList.add("open");
@@ -1071,13 +1140,9 @@ async function openRecommendations(){
     return;
   }
 
-  // Weight artists by how many Solid songs you have from them; check the heaviest hitters first.
-  const artistCounts = {};
-  solidSongs.forEach(s=>{
-    const a = (s.artist || "").trim();
-    if(a) artistCounts[a] = (artistCounts[a] || 0) + 1;
-  });
-  const artists = Object.keys(artistCounts).sort((a, b) => artistCounts[b] - artistCounts[a]);
+  const seeds = await buildSeedArtists(solidSongs);
+  const seedByName = new Map(seeds.map(s => [s.name.toLowerCase(), s]));
+  const artists = seeds.map(s => s.name);
   const known = new Set(songs.map(s => `${(s.title||"").toLowerCase()}|${(s.artist||"").toLowerCase()}`));
 
   try{
@@ -1086,7 +1151,7 @@ async function openRecommendations(){
     const perArtistCount = {};
     const CHUNK_SIZE = 8; // keeps the OR-query URL reasonably short
 
-    for(let i = 0; i < artists.length && candidates.length < 60; i += CHUNK_SIZE){
+    for(let i = 0; i < artists.length && candidates.length < 90; i += CHUNK_SIZE){
       const chunk = artists.slice(i, i + CHUNK_SIZE);
       // Postgrest OR syntax needs literal commas between conditions, so artists
       // containing a comma (rare) are skipped from batching and looked up individually below.
@@ -1106,16 +1171,18 @@ async function openRecommendations(){
             if(!matchedArtist) return;
             const key = `${(r.title||"").toLowerCase()}|${(r.artist||"").toLowerCase()}`;
             if(known.has(key) || seenKeys.has(key)) return;
-            if((perArtistCount[matchedArtist]||0) >= 10) return; // cap per artist, same as before
+            const seed = seedByName.get(matchedArtist.toLowerCase());
+            const cap = seed ? seed.cap : 10;
+            if((perArtistCount[matchedArtist]||0) >= cap) return;
             perArtistCount[matchedArtist] = (perArtistCount[matchedArtist]||0) + 1;
             seenKeys.add(key);
-            candidates.push({...r, sourceArtist: matchedArtist});
+            candidates.push({...r, sourceArtist: matchedArtist, sourceLabel: seed ? seed.label : `By ${matchedArtist}`});
           });
         }
       }
 
       for(const artist of skipped){
-        if(candidates.length >= 60) break;
+        if(candidates.length >= 90) break;
         const term = `*${artist}*`;
         const res = await fetch(
           `${SUPABASE_URL}/rest/v1/karafun_catalog?select=title,artist&artist=ilike.${encodeURIComponent(term)}&limit=10&order=title.asc`,
@@ -1123,11 +1190,12 @@ async function openRecommendations(){
         );
         if(!res.ok) continue;
         const rows = await res.json();
+        const seed = seedByName.get(artist.toLowerCase());
         rows.forEach(r=>{
           const key = `${(r.title||"").toLowerCase()}|${(r.artist||"").toLowerCase()}`;
           if(known.has(key) || seenKeys.has(key)) return;
           seenKeys.add(key);
-          candidates.push({...r, sourceArtist: artist});
+          candidates.push({...r, sourceArtist: artist, sourceLabel: seed ? seed.label : `By ${artist}`});
         });
       }
     }
@@ -1181,7 +1249,7 @@ function renderRecommendations(results, outOfRangeResults, unconfirmedSongs){
         <div class="rec-item-title">${escapeHtml(r.title)}</div>
         <div class="rec-item-artist">${escapeHtml(r.artist)}</div>
         <div class="rec-item-source">
-          Because you're solid on ${escapeHtml(r.sourceArtist)} ·
+          ${escapeHtml(r.sourceLabel)} ·
           <span class="rec-fit-badge ${r.fit.cls}">${r.fit.text}</span>
         </div>
         ${r.transposeMsg ? `<div class="rec-transpose">${escapeHtml(r.transposeMsg)}</div>` : ""}
@@ -1620,6 +1688,19 @@ function loadTheme(){
   applyTheme(saved);
 }
 
+// Last.fm API key — kept client-side only (localStorage), same as theme
+// choice, since it's a personal credential with no per-user server-side
+// home in this app's schema and no need to sync across devices.
+function loadLastfmKey(){
+  try{ return localStorage.getItem("songbook-lastfm-key") || ""; }catch(e){ return ""; }
+}
+function saveLastfmKey(key){
+  try{
+    if(key) localStorage.setItem("songbook-lastfm-key", key);
+    else localStorage.removeItem("songbook-lastfm-key");
+  }catch(e){}
+}
+
 function renderThemeGrid(){
   const grid = document.getElementById("themeGrid");
   const current = document.body.dataset.theme || "jukebox";
@@ -1745,8 +1826,13 @@ document.getElementById("settingsBtn").onclick = () => {
   renderThemeGrid();
   document.getElementById("missingResults").innerHTML = "";
   renderRangeModeUI(currentRangeMode);
+  document.getElementById("rLastfmKey").value = loadLastfmKey();
   settingsBackdrop.classList.add("open");
   settingsSheet.classList.add("open");
+};
+document.getElementById("saveLastfmKeyBtn").onclick = () => {
+  saveLastfmKey(document.getElementById("rLastfmKey").value.trim());
+  showToast("Last.fm key saved");
 };
 function closeSettings(){
   settingsBackdrop.classList.remove("open");

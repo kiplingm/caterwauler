@@ -35,6 +35,21 @@ writes this database going forward.
 - Uses Supabase's newer **publishable key** (`sb_publishable_...`), not
   the legacy anon key.
 
+## Recommendations
+The Recs sheet (✨) searches `karafun_catalog` for songs by artists related
+to your Solid songs, gates every candidate on vocal range via
+`song_ranges`, and groups results into in-range / would-need-a-key-change
+/ range-unconfirmed. Seed artists come from three tiers (`buildSeedArtists`
+in `app.js`), each with a smaller per-artist cap the further it gets from
+a proven Solid artist:
+- **Solid** — artists you're already Solid on (cap 10 songs/artist).
+- **Genre** — other artists already in your songbook (any status but
+  Retired) sharing a genre tag with a Solid song (cap 4).
+- **Similar** — real similar-artist data from Last.fm's `artist.getsimilar`
+  API, for your top 8 Solid artists by song count (cap 4). Only runs if a
+  free Last.fm API key is saved under Settings > Recommendations; the key
+  lives in `localStorage` only, not Supabase.
+
 ## Tests
 `tests.js` unit-tests the pure logic in `app.js` (note/semitone math, range fit scoring, transpose suggestions, string normalization) by extracting those functions straight from the shipped source — not a hand-copied duplicate, so it can't silently drift out of sync. It does not test DOM/UI behavior, Supabase calls, or auth.
 
