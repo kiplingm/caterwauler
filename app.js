@@ -2,8 +2,8 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "7";
-const BUILD_DATE = "2026-07-29T18:46:07-07:00";
+const BUILD_VERSION = "8";
+const BUILD_DATE = "2026-07-29T19:04:17-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
 if(buildInfoEl){
@@ -428,6 +428,7 @@ function render(){
       </a>
       <div class="card-actions">
         <button class="logBtn primary" data-id="${s.id}">Performances</button>
+        <button class="setlistAddBtn" data-id="${s.id}">+ Setlist</button>
         <button class="editBtn" data-id="${s.id}">Edit</button>
         <button class="delBtn danger" data-id="${s.id}">Delete</button>
       </div>
@@ -443,6 +444,7 @@ function render(){
     setTimeout(()=>sel.focus(), 0);
   });
   document.querySelectorAll(".logBtn").forEach(b=>b.onclick = ()=>openLog(b.dataset.id));
+  document.querySelectorAll(".setlistAddBtn").forEach(b=>b.onclick = ()=>openAddToSetlist(b.dataset.id));
   document.querySelectorAll(".editBtn").forEach(b=>b.onclick = ()=>openEdit(b.dataset.id));
   document.querySelectorAll(".delBtn").forEach(b=>b.onclick = ()=>deleteSong(b.dataset.id));
 }
@@ -1458,6 +1460,97 @@ async function deleteSetlist(id, opts={}){
     return false;
   }
 }
+
+// --- Quick add: jump straight from a song card to a new or existing setlist ---
+const addToSetlistSheet = document.getElementById("addToSetlistSheet");
+const addToSetlistBackdrop = document.getElementById("addToSetlistBackdrop");
+let addToSetlistSongId = null;
+
+async function openAddToSetlist(songId){
+  addToSetlistSongId = songId;
+  const song = songs.find(s => s.id === songId);
+  document.getElementById("addToSetlistSongLabel").textContent = song ? `${song.title} — ${song.artist}` : "";
+  document.getElementById("atsNewName").value = "";
+  document.getElementById("addToSetlistList").innerHTML = `<div class="loading">Loading setlists…</div>`;
+  addToSetlistBackdrop.classList.add("open");
+  addToSetlistSheet.classList.add("open");
+  await fetchSetlists(); // keeps this sheet's counts current with the Setlists sheet
+  renderAddToSetlistList();
+}
+function closeAddToSetlist(){
+  addToSetlistBackdrop.classList.remove("open");
+  addToSetlistSheet.classList.remove("open");
+  addToSetlistSongId = null;
+}
+document.getElementById("btnAddToSetlistClose").onclick = closeAddToSetlist;
+
+function renderAddToSetlistList(){
+  const listEl = document.getElementById("addToSetlistList");
+  if(setlists.length === 0){
+    listEl.innerHTML = `<div class="empty" style="padding:16px 4px;">No setlists yet — create one below.</div>`;
+    return;
+  }
+  listEl.innerHTML = setlists.map(sl => {
+    const count = (sl.setlist_songs && sl.setlist_songs[0] && sl.setlist_songs[0].count) || 0;
+    const metaParts = [];
+    if(sl.gig_date) metaParts.push(formatDate(sl.gig_date));
+    if(sl.venue) metaParts.push(sl.venue);
+    metaParts.push(`${count} song${count===1?"":"s"}`);
+    return `
+      <div class="setlist-item" style="cursor:default;">
+        <div class="setlist-item-info">
+          <div class="setlist-item-title">${escapeHtml(sl.name)}</div>
+          <div class="setlist-item-meta">${escapeHtml(metaParts.join(" · "))}</div>
+        </div>
+        <button class="rec-add-btn ats-add-btn" data-id="${sl.id}">+ Add</button>
+      </div>
+    `;
+  }).join("");
+  listEl.querySelectorAll(".ats-add-btn").forEach(b=>{
+    b.onclick = () => addSongToSetlistById(b.dataset.id, addToSetlistSongId);
+  });
+}
+
+async function addSongToSetlistById(setlistId, songId){
+  if(!songId) return;
+  const sl = setlists.find(s => s.id === setlistId);
+  const count = sl ? ((sl.setlist_songs && sl.setlist_songs[0] && sl.setlist_songs[0].count) || 0) : 0;
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/setlist_songs`, {
+      method:"POST", headers:{...HEADERS, "Prefer":"return=representation"},
+      body: JSON.stringify({setlist_id: setlistId, song_id: songId, position: count})
+    });
+    if(res.status === 409){
+      showToast("Already in that setlist");
+      return;
+    }
+    if(!res.ok) throw new Error("Add failed");
+    showToast(`Added to "${sl ? sl.name : "setlist"}"`);
+    closeAddToSetlist();
+    fetchSetlists();
+    // Keep the detail sheet's song list in sync if it happens to be open on this setlist.
+    if(currentSetlistId === setlistId) fetchSetlistSongs(setlistId);
+  }catch(err){
+    showToast("Error: " + err.message);
+  }
+}
+
+document.getElementById("btnAddToSetlistCreate").onclick = async () => {
+  const name = document.getElementById("atsNewName").value.trim();
+  if(!name){ showToast("Name is required"); return; }
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/setlists`, {
+      method:"POST", headers:{...HEADERS, "Prefer":"return=representation"},
+      body: JSON.stringify({name})
+    });
+    if(!res.ok) throw new Error("Create failed");
+    const created = (await res.json())[0];
+    await fetchSetlists(); // pulls the new row into the cache addSongToSetlistById reads from
+    await addSongToSetlistById(created.id, addToSetlistSongId);
+  }catch(err){
+    showToast("Error: " + err.message);
+  }
+};
 
 async function openSetlistDetail(id){
   currentSetlistId = id;

@@ -28,10 +28,13 @@ writes this database going forward.
   (join table with a `position` column for ordering) let a user build
   named, ordered song lists — either a reusable collection or one tied
   to a specific gig date. Both are scoped per-user via `user_id` and RLS,
-  same pattern as `songs`/`performances`. Songs are added manually from
-  the existing songbook (no auto-suggest); reordering re-numbers every
-  row's `position` rather than patching just the two swapped rows, since
-  positions can develop gaps after a song is removed.
+  same pattern as `songs`/`performances`. Songs are added manually —
+  either from a setlist's own "Add songs" search, or via a "+ Setlist"
+  button on every song card in the main songbook list, which opens a
+  picker to add that song straight to an existing setlist or a
+  newly-named one (`openAddToSetlist` in `app.js`). Reordering
+  re-numbers every row's `position` rather than patching just the two
+  swapped rows, since positions can develop gaps after a song is removed.
 - Uses Supabase's newer **publishable key** (`sb_publishable_...`), not
   the legacy anon key.
 
