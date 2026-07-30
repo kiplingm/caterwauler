@@ -24,6 +24,13 @@ writes this database going forward.
 - `karafun_catalog` (~84k songs) and `song_ranges` (shared vocal-range
   lookup, matched by normalized title+artist) are shared reference data,
   open to all signed-in users — not scoped per-user.
+- `songs.in_karafun` (drives the "K" badge) is computed server-side by a
+  `before insert or update of title, artist` trigger
+  (`songs_karafun_check` → `check_karafun_match`), not checked client-side
+  on load. **After importing a refreshed KaraFun catalog CSV into
+  `karafun_catalog`, run `select public.refresh_all_karafun_matches();`**
+  to re-check every existing song — otherwise only newly added/edited
+  songs pick up the new catalog data.
 - `setlists` (name, optional gig date/venue/notes) and `setlist_songs`
   (join table with a `position` column for ordering) let a user build
   named, ordered song lists — either a reusable collection or one tied

@@ -2,8 +2,8 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "11";
-const BUILD_DATE = "2026-07-30T11:43:44-07:00";
+const BUILD_VERSION = "12";
+const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
 if(buildInfoEl){
@@ -175,162 +175,6 @@ async function askClaude(promptText, boxEl){
   window.open("https://claude.ai/new", "_blank");
 }
 
-// Strips connective words ("the", "and", "n") and non-alphanumeric characters,
-// so naming variants that are really the same song/artist compare equal:
-// "The Rolling Stones" vs "Rolling Stones", "Hall & Oates" vs "Hall and
-// Oates", "Rock 'n' Roll" vs "Rock and Roll".
-function coreTokens(str){
-  return (str || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter(Boolean)
-    .filter(tok => tok !== "the" && tok !== "and" && tok !== "n");
-}
-function lenientKey(title, artist){
-  return `${coreTokens(title).join(" ")}|${coreTokens(artist).join(" ")}`;
-}
-
-// Looks up which of the given songs (by normalized title+artist) exist in
-// the shared 84k-song karafun_catalog table, so the songbook can flag them
-// with a "K" badge.
-//
-// Two passes:
-//  1. Fast exact match on the DB's own title_normalized column (cheap — one
-//     "in" query per 50 titles).
-//  2. Lenient fallback for anything pass 1 missed: search KaraFun by artist
-//     (ignoring connector words), then confirm the title also matches once
-//     connectors are ignored on both sides. Both title and artist core
-//     tokens must match, so this doesn't flag unrelated same-titled songs.
-// Once a song's karafun status (in the catalog or not) has been resolved,
-// it's cached here for the rest of the session — the catalog doesn't
-// change mid-session, so there's no reason to re-run the exact/lenient
-// match pipeline for a song we already checked. fetchSongs() runs after
-// almost every mutation (status change, add, edit, dismiss…), so this is
-// what keeps those re-fetches fast instead of re-scanning the whole
-// songbook against the catalog every time.
-const karafunMatchCache = new Map(); // normalized "title|artist" -> boolean
-
-async function fetchKarafunMatches(songList){
-  const keyOf = s => `${normalizeForMatch(s.title)}|${normalizeForMatch(s.artist)}`;
-  const resolvedKeys = new Set();
-  const toCheck = [];
-  songList.forEach(s=>{
-    const key = keyOf(s);
-    if(karafunMatchCache.has(key)){
-      if(karafunMatchCache.get(key)) resolvedKeys.add(key);
-    }else{
-      toCheck.push(s);
-    }
-  });
-  if(toCheck.length === 0) return resolvedKeys;
-
-  const exactMatchSet = new Set();
-  const titles = [...new Set(toCheck.map(s => normalizeForMatch(s.title)).filter(Boolean))];
-  const CHUNK_SIZE = 50;
-  const titleChunks = [];
-  for(let i = 0; i < titles.length; i += CHUNK_SIZE) titleChunks.push(titles.slice(i, i + CHUNK_SIZE));
-
-  // Independent chunks, so fire them all at once instead of awaiting one
-  // at a time — the sequential version was paying full network round-trip
-  // latency per chunk instead of overlapping them.
-  await Promise.all(titleChunks.map(async chunk => {
-    const inClause = chunk.map(t => `"${t}"`).join(",");
-    try{
-      const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/karafun_catalog?select=title_normalized,artist_normalized&title_normalized=in.(${inClause})`,
-        {headers: HEADERS}
-      );
-      if(!res.ok) return;
-      const rows = await res.json();
-      rows.forEach(r => exactMatchSet.add(`${r.title_normalized}|${r.artist_normalized}`));
-    }catch(e){
-      // Non-critical — this chunk falls through to the lenient pass below.
-    }
-  }));
-
-  const unresolved = [];
-  toCheck.forEach(s=>{
-    const key = keyOf(s);
-    if(exactMatchSet.has(key)) resolvedKeys.add(key);
-    else unresolved.push(s);
-  });
-
-  const ARTIST_CHUNK = 8;
-  const uniqueArtists = [...new Set(unresolved.map(s => s.artist).filter(Boolean))];
-
-  const checkCandidates = (rows, songsToCheck) => {
-    const candidateKeys = new Set(rows.map(r => lenientKey(r.title, r.artist)));
-    songsToCheck.forEach(s=>{
-      const key = keyOf(s);
-      if(resolvedKeys.has(key)) return;
-      if(candidateKeys.has(lenientKey(s.title, s.artist))) resolvedKeys.add(key);
-    });
-  };
-
-  const artistChunks = [];
-  for(let i = 0; i < uniqueArtists.length; i += ARTIST_CHUNK) artistChunks.push(uniqueArtists.slice(i, i + ARTIST_CHUNK));
-
-  await Promise.all(artistChunks.map(async chunk => {
-    // Postgrest OR syntax needs literal commas between conditions, so artists
-    // containing a comma (rare) are looked up individually below instead.
-    const batchable = chunk.filter(a => !a.includes(","));
-    const skipped = chunk.filter(a => a.includes(","));
-
-    const jobs = [];
-
-    if(batchable.length > 0){
-      const orClause = batchable
-        .map(a => {
-          const tokens = coreTokens(a);
-          const pattern = tokens.length ? tokens.join("*") : a.toLowerCase();
-          return `artist.ilike.${encodeURIComponent(`*${pattern}*`)}`;
-        })
-        .join(",");
-      jobs.push((async () => {
-        try{
-          const res = await fetch(
-            `${SUPABASE_URL}/rest/v1/karafun_catalog?select=title,artist&or=(${orClause})&limit=500`,
-            {headers: HEADERS}
-          );
-          if(res.ok){
-            const rows = await res.json();
-            checkCandidates(rows, unresolved.filter(s => batchable.includes(s.artist)));
-          }
-        }catch(e){ /* non-critical */ }
-      })());
-    }
-
-    skipped.forEach(artist => {
-      const tokens = coreTokens(artist);
-      const pattern = tokens.length ? tokens.join("*") : artist.toLowerCase();
-      jobs.push((async () => {
-        try{
-          const res = await fetch(
-            `${SUPABASE_URL}/rest/v1/karafun_catalog?select=title,artist&artist=ilike.${encodeURIComponent(`*${pattern}*`)}&limit=100`,
-            {headers: HEADERS}
-          );
-          if(res.ok){
-            const rows = await res.json();
-            checkCandidates(rows, unresolved.filter(s => s.artist === artist));
-          }
-        }catch(e){ /* non-critical */ }
-      })());
-    });
-
-    await Promise.all(jobs);
-  }));
-
-  // Cache every song we just checked (both hits and misses) so future
-  // fetchSongs() calls this session don't redo the work for it.
-  toCheck.forEach(s=>{
-    const key = keyOf(s);
-    karafunMatchCache.set(key, resolvedKeys.has(key));
-  });
-
-  return resolvedKeys;
-}
-
 async function fetchSongs(){
   try{
     const res = await fetch(
@@ -347,18 +191,11 @@ async function fetchSongs(){
       return {
         ...s,
         last_played: dates.length ? dates[dates.length-1] : null,
-        fit_score: fitScore(s.low_note, s.high_note),
-        in_karafun: false // patched in below once the catalog check resolves
+        fit_score: fitScore(s.low_note, s.high_note)
+        // in_karafun comes straight from the row — a DB trigger sets it
+        // whenever a song's title/artist is inserted or changed, so there's
+        // no catalog check to run client-side on every load anymore.
       };
-    });
-    // Paint the real cards right away — don't make the first render wait
-    // on the KaraFun catalog check, which only affects a small "K" badge
-    // and can take a few hundred ms+ of network round trips on its own.
-    render();
-
-    const karafunSet = await fetchKarafunMatches(raw);
-    songs.forEach(s => {
-      s.in_karafun = karafunSet.has(`${normalizeForMatch(s.title)}|${normalizeForMatch(s.artist)}`);
     });
     render();
   }catch(err){
