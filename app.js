@@ -2,8 +2,8 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "10";
-const BUILD_DATE = "2026-07-30T09:01:05-07:00";
+const BUILD_VERSION = "11";
+const BUILD_DATE = "2026-07-30T11:43:44-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
 if(buildInfoEl){
@@ -339,7 +339,6 @@ async function fetchSongs(){
     );
     if(!res.ok) throw new Error("Fetch failed: " + res.status);
     const raw = await res.json();
-    const karafunSet = await fetchKarafunMatches(raw);
     songs = raw.map(s => {
       const dates = (s.performances || [])
         .map(p => p.performance_date)
@@ -349,8 +348,17 @@ async function fetchSongs(){
         ...s,
         last_played: dates.length ? dates[dates.length-1] : null,
         fit_score: fitScore(s.low_note, s.high_note),
-        in_karafun: karafunSet.has(`${normalizeForMatch(s.title)}|${normalizeForMatch(s.artist)}`)
+        in_karafun: false // patched in below once the catalog check resolves
       };
+    });
+    // Paint the real cards right away — don't make the first render wait
+    // on the KaraFun catalog check, which only affects a small "K" badge
+    // and can take a few hundred ms+ of network round trips on its own.
+    render();
+
+    const karafunSet = await fetchKarafunMatches(raw);
+    songs.forEach(s => {
+      s.in_karafun = karafunSet.has(`${normalizeForMatch(s.title)}|${normalizeForMatch(s.artist)}`);
     });
     render();
   }catch(err){
