@@ -24,6 +24,14 @@ writes this database going forward.
 - `karafun_catalog` (~84k songs) and `song_ranges` (shared vocal-range
   lookup, matched by normalized title+artist) are shared reference data,
   open to all signed-in users — not scoped per-user.
+- `setlists` (name, optional gig date/venue/notes) and `setlist_songs`
+  (join table with a `position` column for ordering) let a user build
+  named, ordered song lists — either a reusable collection or one tied
+  to a specific gig date. Both are scoped per-user via `user_id` and RLS,
+  same pattern as `songs`/`performances`. Songs are added manually from
+  the existing songbook (no auto-suggest); reordering re-numbers every
+  row's `position` rather than patching just the two swapped rows, since
+  positions can develop gaps after a song is removed.
 - Uses Supabase's newer **publishable key** (`sb_publishable_...`), not
   the legacy anon key.
 

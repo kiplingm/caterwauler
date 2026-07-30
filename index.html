@@ -55,6 +55,10 @@
       <h1>SETLIST SHERPA</h1>
       <div class="marquee-actions">
         <div class="icon-btn-wrap">
+          <button class="gear-btn" id="setlistsBtn" aria-label="Setlists">🎤</button>
+          <span class="icon-btn-label">Setlists</span>
+        </div>
+        <div class="icon-btn-wrap">
           <button class="gear-btn" id="recBtn" aria-label="Recommendations">✨</button>
           <span class="icon-btn-label">Recs</span>
         </div>
@@ -206,6 +210,57 @@
   <div class="sheet-actions">
     <button class="btn-cancel" id="btnRecClose" style="flex:1;">Close</button>
   </div>
+</div>
+
+<div class="sheet-backdrop" id="setlistsBackdrop"></div>
+<div class="sheet" id="setlistsSheet">
+  <h2>Setlists</h2>
+  <div id="setlistsList"></div>
+  <div class="sheet-actions">
+    <button class="btn-cancel" id="btnSetlistsClose" style="flex:1;">Close</button>
+    <button class="btn-save" id="btnNewSetlist" style="flex:1;">+ New setlist</button>
+  </div>
+</div>
+
+<div class="sheet-backdrop" id="setlistDetailBackdrop"></div>
+<div class="sheet" id="setlistDetailSheet">
+  <h2 id="setlistDetailTitle">New setlist</h2>
+  <input type="hidden" id="setlistEditId">
+  <div class="field">
+    <label>NAME</label>
+    <input type="text" id="slName" placeholder="e.g. The Swiss — Friday">
+  </div>
+  <div class="field-row">
+    <div class="field">
+      <label>GIG DATE</label>
+      <input type="date" id="slDate">
+    </div>
+    <div class="field">
+      <label>VENUE</label>
+      <input type="text" id="slVenue" placeholder="e.g. The Swiss">
+    </div>
+  </div>
+  <div class="field">
+    <label>NOTES</label>
+    <input type="text" id="slNotes" placeholder="Anything worth remembering…">
+  </div>
+  <div class="sheet-actions">
+    <button class="btn-cancel" id="btnSetlistDetailCancel">Cancel</button>
+    <button class="btn-save" id="btnSetlistDetailSave">Save</button>
+  </div>
+
+  <div id="setlistSongsSection" style="display:none;">
+    <div class="settings-section-label">Songs in this setlist</div>
+    <div id="setlistSongsList"></div>
+
+    <div class="settings-section-label">Add songs</div>
+    <div class="field">
+      <input type="text" id="slAddSearch" placeholder="Search your songbook…" autocomplete="off">
+    </div>
+    <div id="slAddResults" class="sl-add-results"></div>
+  </div>
+
+  <button class="btn-delete-song" id="btnDeleteSetlist" style="display:none;">Delete setlist</button>
 </div>
 
 <div class="sheet-backdrop" id="settingsBackdrop"></div>
