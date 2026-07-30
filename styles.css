@@ -393,6 +393,20 @@
   .toast.show{opacity:1;}
 
   .empty{padding:40px 20px; text-align:center; color:var(--cream-dim); font-family:'IBM Plex Mono',monospace; font-size:12.5px;}
+
+  .catalog-fallback{margin:0 14px 20px; border:1px dashed var(--line); border-radius:12px; overflow:hidden;}
+  .catalog-fallback-label{
+    padding:10px 14px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cream-dim);
+    letter-spacing:0.2px;
+  }
+  .catalog-fallback-item{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:11px 14px; border-top:1px solid var(--line);
+  }
+  .catalog-fallback-add{
+    flex:none; font-family:'Inter',sans-serif; font-size:12px; font-weight:600;
+    padding:7px 12px; border-radius:8px; border:1px solid var(--teal); color:var(--teal); background:transparent;
+  }
   .skeleton-card{
     height:132px; border-radius:14px; background:var(--bg-raised); border:1px solid var(--line);
     animation:skeleton-pulse 1.4s ease-in-out infinite;

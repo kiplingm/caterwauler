@@ -97,6 +97,13 @@ let songs = [];
 let activeFilter = "All";
 let searchTerm = "";
 let sortMode = "fit";
+// Main search bar's KaraFun-catalog fallback: when a search matches nothing
+// anywhere in the user's own songbook, we debounce a lookup against the
+// shared catalog and offer results as "not in your songbook yet" adds.
+// The token guards against a slow response from an earlier keystroke
+// landing after a newer one has already redrawn the list.
+let catalogFallbackToken = 0;
+let catalogFallbackDebounce = null;
 let editingStatusId = null;
 const STATUS_OPTIONS = ["Solid","Learning","Maybe","Suggested","Retired"];
 const STATUS_ICONS = {Solid:"✓", Learning:"◐", Maybe:"?", Suggested:"★", Retired:"✕"};
@@ -401,7 +408,34 @@ function render(){
   countRow.textContent = `${filtered.length} of ${songs.length} songs`;
 
   if(filtered.length===0){
-    listEl.innerHTML = `<div class="empty">No songs match. Try a different search or filter — or add one with the + button.</div>`;
+    const term = searchTerm.trim();
+    // Only worth offering a catalog fallback if the term truly matches
+    // nothing in the user's songbook at all — if it matches under a
+    // different status filter, it's already in their catalog, just
+    // hidden by the current chip, so a "not in your songbook" prompt
+    // would be misleading.
+    const matchesAnywhere = songs.some(s =>
+      (s.title||"").toLowerCase().includes(searchTerm) || (s.artist||"").toLowerCase().includes(searchTerm)
+    );
+
+    if(term.length >= 2 && !matchesAnywhere){
+      const myToken = ++catalogFallbackToken;
+      listEl.innerHTML = `
+        <div class="empty">No songs match in your songbook.</div>
+        <div class="catalog-fallback" id="catalogFallback">
+          <div class="catalog-fallback-label">Searching the KaraFun catalog…</div>
+        </div>`;
+      clearTimeout(catalogFallbackDebounce);
+      catalogFallbackDebounce = setTimeout(async () => {
+        const results = await searchCatalog(term);
+        if(myToken !== catalogFallbackToken) return; // a newer search superseded this one
+        renderCatalogFallback(results, term);
+      }, 300);
+    }else{
+      clearTimeout(catalogFallbackDebounce);
+      catalogFallbackToken++; // invalidate any in-flight fallback lookup
+      listEl.innerHTML = `<div class="empty">No songs match. Try a different search or filter — or add one with the + button.</div>`;
+    }
     return;
   }
 
@@ -466,6 +500,61 @@ async function updateStatus(id, newStatus){
     showToast("Error: " + err.message);
     render();
   }
+}
+
+// Renders the KaraFun catalog fallback results into the placeholder left
+// by render(). Bails silently if that placeholder is no longer in the DOM
+// (the list has since re-rendered for some other reason).
+function renderCatalogFallback(results, term){
+  const container = document.getElementById("catalogFallback");
+  if(!container) return;
+
+  if(results.length === 0){
+    container.innerHTML = `<div class="catalog-fallback-label">No KaraFun catalog matches for "${escapeHtml(term)}" either.</div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="catalog-fallback-label">Not in your songbook — found in the KaraFun catalog:</div>
+    ${results.map((r, i) => `
+      <div class="catalog-fallback-item">
+        <div>
+          <div class="ac-title">${escapeHtml(r.title)}</div>
+          <div class="ac-artist">${escapeHtml(r.artist)}</div>
+        </div>
+        <button class="catalog-fallback-add" data-idx="${i}">+ Add</button>
+      </div>
+    `).join("")}
+  `;
+  container.querySelectorAll(".catalog-fallback-add").forEach(btn => {
+    btn.onclick = () => {
+      const picked = results[btn.dataset.idx];
+      openAddFromCatalog(picked.title, picked.artist);
+    };
+  });
+}
+
+// Opens the add-song sheet pre-filled from a KaraFun catalog pick (either
+// the main search's fallback or, in principle, any other catalog result).
+// Mirrors the fabAdd handler's reset logic, then tries to auto-fill the
+// vocal range from song_ranges the same way the add form's own autocomplete
+// does.
+function openAddFromCatalog(title, artist){
+  document.getElementById("sheetTitle").textContent = "Add song";
+  document.getElementById("editId").value = "";
+  document.getElementById("fTitle").value = title || "";
+  document.getElementById("fArtist").value = artist || "";
+  document.getElementById("fLow").value = "";
+  document.getElementById("fHigh").value = "";
+  document.getElementById("fGenre").value = "";
+  document.getElementById("fKeyNotes").value = "";
+  document.getElementById("fStatus").value = "Maybe";
+  document.getElementById("fRangeSource").value = "manual";
+  document.getElementById("titleSuggestions").classList.remove("open");
+  document.getElementById("artistSuggestions").classList.remove("open");
+  document.getElementById("btnDeleteSong").style.display = "none";
+  openSheet();
+  tryAutoFillRange(title, artist);
 }
 
 function formatDate(iso){
