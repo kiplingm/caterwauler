@@ -2,8 +2,8 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "8";
-const BUILD_DATE = "2026-07-29T19:04:17-07:00";
+const BUILD_VERSION = "9";
+const BUILD_DATE = "2026-07-30T06:51:53-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
 if(buildInfoEl){
@@ -1124,6 +1124,20 @@ function normalizeForMatch(str){
   return (str || "").replace(/[^a-zA-Z0-9]+/g, "").toLowerCase();
 }
 
+// Songs the user has explicitly dismissed from recommendations, so they
+// don't keep resurfacing every time openRecommendations() runs. Keyed by
+// normalized title+artist, same convention as fetchSongRanges() below.
+async function fetchDismissedRecommendations(){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/dismissed_recommendations?select=title_normalized,artist_normalized`, {headers: HEADERS});
+    if(!res.ok) return new Set();
+    const rows = await res.json();
+    return new Set(rows.map(r => `${r.title_normalized}|${r.artist_normalized}`));
+  }catch(e){
+    return new Set();
+  }
+}
+
 async function fetchSongRanges(){
   try{
     const res = await fetch(`${SUPABASE_URL}/rest/v1/song_ranges?select=title,artist,low_note,high_note`, {headers: HEADERS});
@@ -1261,6 +1275,7 @@ async function openRecommendations(){
   const seedByName = new Map(seeds.map(s => [s.name.toLowerCase(), s]));
   const artists = seeds.map(s => s.name);
   const known = new Set(songs.map(s => `${(s.title||"").toLowerCase()}|${(s.artist||"").toLowerCase()}`));
+  const dismissed = await fetchDismissedRecommendations();
 
   try{
     const candidates = [];
@@ -1287,7 +1302,8 @@ async function openRecommendations(){
             const matchedArtist = batchable.find(a => (r.artist||"").toLowerCase().includes(a.toLowerCase()));
             if(!matchedArtist) return;
             const key = `${(r.title||"").toLowerCase()}|${(r.artist||"").toLowerCase()}`;
-            if(known.has(key) || seenKeys.has(key)) return;
+            const normKey = `${normalizeForMatch(r.title)}|${normalizeForMatch(r.artist)}`;
+            if(known.has(key) || seenKeys.has(key) || dismissed.has(normKey)) return;
             const seed = seedByName.get(matchedArtist.toLowerCase());
             const cap = seed ? seed.cap : 10;
             if((perArtistCount[matchedArtist]||0) >= cap) return;
@@ -1310,7 +1326,8 @@ async function openRecommendations(){
         const seed = seedByName.get(artist.toLowerCase());
         rows.forEach(r=>{
           const key = `${(r.title||"").toLowerCase()}|${(r.artist||"").toLowerCase()}`;
-          if(known.has(key) || seenKeys.has(key)) return;
+          const normKey = `${normalizeForMatch(r.title)}|${normalizeForMatch(r.artist)}`;
+          if(known.has(key) || seenKeys.has(key) || dismissed.has(normKey)) return;
           seenKeys.add(key);
           candidates.push({...r, sourceArtist: artist, sourceLabel: seed ? seed.label : `By ${artist}`});
         });
@@ -1391,7 +1408,8 @@ function renderRecommendations(results, outOfRangeResults, unconfirmedSongs){
     b.onclick = () => addRecommendation(source[b.dataset.idx], b.closest(".rec-item"));
   });
   listEl.querySelectorAll(".rec-dismiss-btn").forEach(b=>{
-    b.onclick = () => animateRemove(b.closest(".rec-item"));
+    const source = b.dataset.group === "fit" ? results : outOfRangeResults;
+    b.onclick = () => dismissRecommendation(source[b.dataset.idx], b.closest(".rec-item"));
   });
   wireAskClaudeRecBtn(unconfirmedSongs);
 }
@@ -1432,6 +1450,24 @@ async function addRecommendation(rec, itemEl){
   }catch(err){
     showToast("Error: " + err.message);
   }
+}
+
+// Persists a recommendation dismissal so it's excluded from future
+// openRecommendations() runs (see fetchDismissedRecommendations() /
+// the `dismissed` filter above). Uses upsert so re-dismissing something
+// already dismissed (e.g. a race between tabs) doesn't error.
+async function dismissRecommendation(rec, itemEl){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/dismissed_recommendations`, {
+      method:"POST",
+      headers:{...HEADERS, "Prefer":"return=minimal,resolution=merge-duplicates"},
+      body: JSON.stringify({title: rec.title, artist: rec.artist})
+    });
+    if(!res.ok) throw new Error("Dismiss failed");
+  }catch(err){
+    showToast("Error: " + err.message);
+  }
+  await animateRemove(itemEl);
 }
 
 // --- Setlists: named, ordered song lists optionally tied to a gig date/venue ---
