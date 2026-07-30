@@ -61,6 +61,13 @@ Run with:
 node tests.js
 ```
 
+## Deploying
+`tests.js` must pass before every push. Also bump the cache-busting `?v=`
+query param on `app.js` and `styles.css` in `index.html`, and match it to
+`BUILD_VERSION` at the top of `app.js` — GitHub Pages/browsers (especially
+iOS home-screen icons) can otherwise keep serving a stale cached bundle
+after a deploy, silently undoing whatever just shipped.
+
 ## Known open items
 - App icons for `public`/PWA install are still placeholder/empty.
 - Some songs in the songbook don't have a matching `karafun_catalog`
