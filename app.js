@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "12";
+const BUILD_VERSION = "13";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -97,6 +97,15 @@ let songs = [];
 let activeFilter = "All";
 let searchTerm = "";
 let sortMode = "fit";
+// Sing Now is the landing view: a short, ranked stack of Solid songs meant
+// for picking your next song live at karaoke, as opposed to the full
+// Songbook view (search/filter/sort over everything). Persisted so the
+// app reopens on whichever mode was last used.
+let currentView = localStorage.getItem("ss_view") === "songbook" ? "songbook" : "singNow";
+// Ids excluded from the current Sing Now stack — populated by "Give me
+// different picks" so reshuffling doesn't just show the same songs again
+// until every eligible song has had a turn, then it resets.
+let singNowExcludeIds = new Set();
 // Main search bar's KaraFun-catalog fallback: when a search matches nothing
 // anywhere in the user's own songbook, we debounce a lookup against the
 // shared catalog and offer results as "not in your songbook yet" adds.
@@ -130,6 +139,13 @@ document.getElementById("search").addEventListener("input", e=>{
   searchTerm = e.target.value.toLowerCase();
   render();
 });
+
+// Sync the switcher/controls/list visibility to the persisted view before
+// any songs have loaded — fetchSongs() -> render() will redraw content
+// into whichever container is already showing. Deliberately not calling
+// render() here, so the static skeleton-card markup in index.html stays
+// visible until fetchSongs() actually resolves post-auth.
+syncViewVisibility(currentView);
 
 function showToast(msg){
   const t = document.getElementById("toast");
@@ -221,6 +237,48 @@ function fitLabel(lowS, highS){
   if(lowS >= comfortLowS && highS <= comfortHighS) return {cls:"fit-easy", text:"✓ EASY FIT"};
   if(lowS >= stretchLowS && highS <= stretchHighS) return {cls:"fit-stretch", text:"△ STRETCH"};
   return {cls:"fit-out", text:"✕ OUT OF RANGE"};
+}
+
+// Ranks Solid-status songs for the "Sing Now" quick-pick stack: songs you
+// haven't sung in a while are favored (or have never been logged at all),
+// with a known-good range fit as a lighter-weight tiebreaker. Pure/testable
+// on purpose — takes the already-shaped `songs` array (with last_played and
+// fit_score already computed by fetchSongs) plus an `excludeIds` set for
+// reshuffling, and returns the top `count` picks, best-first.
+//
+// Lower internal score = picked sooner. Staleness (days since last sung,
+// capped so "3 months ago" and "a year ago" aren't wildly different) is
+// weighted far more than fit, since every candidate is already Solid —
+// fit only breaks near-ties. Never-sung songs are treated as maximally
+// stale so they surface early rather than languishing unpicked forever.
+const SING_NOW_STALENESS_CAP_DAYS = 90;
+const SING_NOW_FIT_TIEBREAK_WEIGHT = 0.3;
+
+function pickSingNowSongs(allSongs, options){
+  options = options || {};
+  const count = options.count === undefined ? 5 : options.count;
+  const excludeIds = options.excludeIds || new Set();
+  const now = options.now || new Date();
+  const eligible = allSongs.filter(s => s.status === "Solid" && !excludeIds.has(s.id));
+
+  const scored = eligible.map(s => {
+    const daysSince = s.last_played
+      ? Math.floor((now - new Date(s.last_played)) / 86400000)
+      : Infinity;
+    const staleness = isFinite(daysSince)
+      ? Math.min(daysSince, SING_NOW_STALENESS_CAP_DAYS)
+      : SING_NOW_STALENESS_CAP_DAYS + 1; // never logged — nudge above the cap so it's not tied with "just old"
+    const fitPenalty = isFinite(s.fit_score) ? s.fit_score : 0; // unknown range = neutral, not penalized
+    const score = fitPenalty * SING_NOW_FIT_TIEBREAK_WEIGHT - staleness;
+    return {song: s, score};
+  });
+
+  scored.sort((a, b) => {
+    if(a.score !== b.score) return a.score - b.score;
+    return (a.song.title || "").localeCompare(b.song.title || "");
+  });
+
+  return scored.slice(0, count).map(x => x.song);
 }
 
 // Lower score = better fit against comfort zone. Unknown ranges sort last.
@@ -356,6 +414,85 @@ function renderRangeStrip(low, high, rangeSource){
 }
 
 function render(){
+  if(currentView === "singNow"){
+    renderSingNow();
+  }else{
+    renderSongbook();
+  }
+}
+
+function syncViewVisibility(view){
+  document.getElementById("viewSingNowBtn").classList.toggle("active", view === "singNow");
+  document.getElementById("viewSongbookBtn").classList.toggle("active", view === "songbook");
+  document.getElementById("singNowList").style.display = view === "singNow" ? "flex" : "none";
+  document.getElementById("list").style.display = view === "songbook" ? "flex" : "none";
+  document.getElementById("controls").style.display = view === "songbook" ? "flex" : "none";
+  countRow.style.display = view === "songbook" ? "block" : "none";
+}
+
+function setView(view){
+  currentView = view;
+  localStorage.setItem("ss_view", view);
+  syncViewVisibility(view);
+  render();
+}
+
+document.getElementById("viewSingNowBtn").onclick = () => setView("singNow");
+document.getElementById("viewSongbookBtn").onclick = () => setView("songbook");
+
+function renderSingNow(){
+  const listEl = document.getElementById("singNowList");
+  const solidCount = songs.filter(s => s.status === "Solid").length;
+
+  if(solidCount === 0){
+    listEl.innerHTML = `
+      <div class="empty">
+        No Solid songs yet — Sing Now picks from songs marked Solid.<br>
+        Mark a few in your Songbook and they'll show up here.
+      </div>`;
+    return;
+  }
+
+  const picks = pickSingNowSongs(songs, {excludeIds: singNowExcludeIds});
+
+  if(picks.length === 0){
+    // Every Solid song has been excluded via reshuffling — reset and
+    // start the rotation over rather than showing a dead end.
+    singNowExcludeIds = new Set();
+    renderSingNow();
+    return;
+  }
+
+  listEl.innerHTML = `
+    <div class="sing-now-intro">Your next best picks, right now:</div>
+    ${picks.map(s => `
+      <div class="card sing-now-card" data-id="${s.id}">
+        <div class="card-top">
+          <div>
+            <div class="title">${escapeHtml(s.title)}${s.in_karafun ? `<span class="karafun-badge" title="In the KaraFun catalog">K</span>` : ""}</div>
+            <div class="artist">${escapeHtml(s.artist)}</div>
+          </div>
+        </div>
+        ${renderRangeStrip(s.low_note, s.high_note, s.range_source)}
+        <div class="card-meta">
+          ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : `<span>Never logged</span>`}
+        </div>
+        <div class="card-actions">
+          <button class="logBtn primary sing-it-btn" data-id="${s.id}">Sing it →</button>
+        </div>
+      </div>
+    `).join("")}
+    <button class="reshuffle-btn" id="reshuffleBtn">🔀 Give me different picks</button>
+  `;
+
+  document.querySelectorAll(".sing-it-btn").forEach(b => b.onclick = () => openLog(b.dataset.id));
+  document.getElementById("reshuffleBtn").onclick = () => {
+    picks.forEach(s => singNowExcludeIds.add(s.id));
+    renderSingNow();
+  };
+}
+
+function renderSongbook(){
   let filtered = songs.filter(s=>{
     const matchesFilter = activeFilter==="All" || s.status===activeFilter;
     const matchesSearch = !searchTerm || (s.title||"").toLowerCase().includes(searchTerm) || (s.artist||"").toLowerCase().includes(searchTerm);

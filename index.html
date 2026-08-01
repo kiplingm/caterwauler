@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>Setlist Sherpa</title>
-<link rel="stylesheet" href="styles.css?v=10">
+<link rel="stylesheet" href="styles.css?v=11">
 </head>
 <body>
 
@@ -71,7 +71,12 @@
     <div class="sub" id="rangeLine">YOUR RANGE — LOADING…</div>
   </div>
 
-  <div class="controls">
+  <div class="view-switcher" id="viewSwitcher">
+    <button class="view-tab active" id="viewSingNowBtn" data-view="singNow">🎤 Sing Now</button>
+    <button class="view-tab" id="viewSongbookBtn" data-view="songbook">📋 Songbook</button>
+  </div>
+
+  <div class="controls" id="controls">
     <div class="search-row">
       <input type="text" id="search" placeholder="Search title or artist…">
       <select id="sortSelect" class="sort-select">
@@ -89,7 +94,11 @@
 
   <div class="count-row" id="countRow"></div>
 </div>
-<div class="list" id="list">
+<div class="list" id="singNowList">
+  <div class="skeleton-card"></div>
+  <div class="skeleton-card"></div>
+</div>
+<div class="list" id="list" style="display:none;">
   <div class="skeleton-card"></div>
   <div class="skeleton-card"></div>
   <div class="skeleton-card"></div>
@@ -365,6 +374,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=12"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>
