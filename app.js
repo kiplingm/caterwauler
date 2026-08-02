@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "13";
+const BUILD_VERSION = "14";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -1312,6 +1312,13 @@ async function tryAutoFillRange(title, artist){
 // carries a `label` used directly in the UI and a `cap` limiting how many
 // catalog songs from that artist get pulled in, since genre/similar
 // matches are hunches and shouldn't crowd out proven-artist results.
+//
+// Solid artists are seeded least-represented first: an artist you're
+// already deep on (lots of Solid songs) doesn't need more backfill from
+// recommendations, but one you're only solid on one song for has real
+// room to grow. Each tier also gets its own candidate budget (see
+// openRecommendations) so a long solid-artist list can't starve out
+// genre/similar before they're ever queried.
 async function buildSeedArtists(solidSongs){
   const seeds = [];
   const seenArtistKeys = new Set();
@@ -1321,9 +1328,9 @@ async function buildSeedArtists(solidSongs){
     const a = (s.artist || "").trim();
     if(a) artistCounts[a] = (artistCounts[a] || 0) + 1;
   });
-  const solidArtistNames = Object.keys(artistCounts).sort((a, b) => artistCounts[b] - artistCounts[a]);
+  const solidArtistNames = Object.keys(artistCounts).sort((a, b) => artistCounts[a] - artistCounts[b]);
   solidArtistNames.forEach(name=>{
-    seeds.push({name, type:"solid", cap:10, label:`Because you're solid on ${name}`});
+    seeds.push({name, type:"solid", cap:4, label:`Because you're solid on ${name}`});
     seenArtistKeys.add(name.toLowerCase());
   });
 
@@ -1348,9 +1355,13 @@ async function buildSeedArtists(solidSongs){
   }
 
   // Last.fm similar artists — optional, only runs if a key is saved.
+  // Anchored on your *most*-represented solid artists (your signature
+  // sound), not the ascending backfill order above — "similar to the
+  // artist you're only solid on once" is a much weaker signal than
+  // "similar to the artist you have eight solid songs for."
   const lastfmKey = loadLastfmKey();
   if(lastfmKey && solidArtistNames.length > 0){
-    const topArtists = solidArtistNames.slice(0, 8); // cap calls, heaviest hitters first
+    const topArtists = [...solidArtistNames].sort((a, b) => artistCounts[b] - artistCounts[a]).slice(0, 8);
     for(const artist of topArtists){
       try{
         const url = `https://ws.audioscrobbler.com/2.0/?method=artist.getsimilar&artist=${encodeURIComponent(artist)}&api_key=${encodeURIComponent(lastfmKey)}&format=json&limit=5`;
@@ -1373,6 +1384,93 @@ async function buildSeedArtists(solidSongs){
   return seeds;
 }
 
+// Fetches karafun_catalog candidates for one tier's seed list only,
+// stopping once `budget` candidates have been collected *for this tier*.
+// Each seed's own `cap` still limits how many songs come from any one
+// artist. `seenKeys` is shared across all three tier calls so the same
+// song is never pulled in twice even if it happens to match seeds from
+// more than one tier.
+async function fetchTierCandidates(seedList, budget, known, dismissed, seenKeys){
+  const candidates = [];
+  const perArtistCount = {};
+  const CHUNK_SIZE = 8; // keeps the OR-query URL reasonably short
+  const seedByName = new Map(seedList.map(s => [s.name.toLowerCase(), s]));
+  const artists = seedList.map(s => s.name);
+
+  for(let i = 0; i < artists.length && candidates.length < budget; i += CHUNK_SIZE){
+    const chunk = artists.slice(i, i + CHUNK_SIZE);
+    // Postgrest OR syntax needs literal commas between conditions, so artists
+    // containing a comma (rare) are skipped from batching and looked up individually below.
+    const batchable = chunk.filter(a => !a.includes(","));
+    const skipped = chunk.filter(a => a.includes(","));
+
+    if(batchable.length > 0){
+      const orClause = batchable.map(a => `artist.ilike.${encodeURIComponent(`*${a}*`)}`).join(",");
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/karafun_catalog?select=title,artist&or=(${orClause})&limit=200&order=artist.asc`,
+        {headers: HEADERS}
+      );
+      if(res.ok){
+        const rows = await res.json();
+        rows.forEach(r=>{
+          if(candidates.length >= budget) return;
+          const matchedArtist = batchable.find(a => (r.artist||"").toLowerCase().includes(a.toLowerCase()));
+          if(!matchedArtist) return;
+          const key = `${(r.title||"").toLowerCase()}|${(r.artist||"").toLowerCase()}`;
+          const normKey = `${normalizeForMatch(r.title)}|${normalizeForMatch(r.artist)}`;
+          if(known.has(key) || seenKeys.has(key) || dismissed.has(normKey)) return;
+          const seed = seedByName.get(matchedArtist.toLowerCase());
+          const cap = seed ? seed.cap : 10;
+          if((perArtistCount[matchedArtist]||0) >= cap) return;
+          perArtistCount[matchedArtist] = (perArtistCount[matchedArtist]||0) + 1;
+          seenKeys.add(key);
+          candidates.push({...r, sourceArtist: matchedArtist, sourceLabel: seed ? seed.label : `By ${matchedArtist}`});
+        });
+      }
+    }
+
+    for(const artist of skipped){
+      if(candidates.length >= budget) break;
+      const term = `*${artist}*`;
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/karafun_catalog?select=title,artist&artist=ilike.${encodeURIComponent(term)}&limit=10&order=title.asc`,
+        {headers: HEADERS}
+      );
+      if(!res.ok) continue;
+      const rows = await res.json();
+      const seed = seedByName.get(artist.toLowerCase());
+      rows.forEach(r=>{
+        if(candidates.length >= budget) return;
+        const key = `${(r.title||"").toLowerCase()}|${(r.artist||"").toLowerCase()}`;
+        const normKey = `${normalizeForMatch(r.title)}|${normalizeForMatch(r.artist)}`;
+        if(known.has(key) || seenKeys.has(key) || dismissed.has(normKey)) return;
+        seenKeys.add(key);
+        candidates.push({...r, sourceArtist: artist, sourceLabel: seed ? seed.label : `By ${artist}`});
+      });
+    }
+  }
+
+  return candidates;
+}
+
+// Round-robins multiple tier candidate lists into one — one from each
+// list in turn, cycling until all are exhausted — so the final order
+// isn't dominated by whichever tier happens to be biggest, even though
+// each tier already has its own budget.
+function interleaveTiers(tierLists){
+  const merged = [];
+  let idx = 0;
+  let any = tierLists.some(l => l.length > 0);
+  while(any){
+    any = false;
+    for(const list of tierLists){
+      if(idx < list.length){ merged.push(list[idx]); any = true; }
+    }
+    idx++;
+  }
+  return merged;
+}
+
 async function openRecommendations(){
   recBackdrop.classList.add("open");
   recSheet.classList.add("open");
@@ -1386,67 +1484,21 @@ async function openRecommendations(){
   }
 
   const seeds = await buildSeedArtists(solidSongs);
-  const seedByName = new Map(seeds.map(s => [s.name.toLowerCase(), s]));
-  const artists = seeds.map(s => s.name);
   const known = new Set(songs.map(s => `${(s.title||"").toLowerCase()}|${(s.artist||"").toLowerCase()}`));
   const dismissed = await fetchDismissedRecommendations();
 
   try{
-    const candidates = [];
+    // Each tier gets its own candidate budget, fetched independently, so
+    // a long solid-artist list can't starve out genre/similar before
+    // they're ever queried — previously all three shared one running
+    // counter processed solid-first, which meant genre/similar frequently
+    // never ran at all once solid alone filled the shared cap.
+    const TIER_BUDGETS = {solid: 35, genre: 30, similar: 25};
     const seenKeys = new Set();
-    const perArtistCount = {};
-    const CHUNK_SIZE = 8; // keeps the OR-query URL reasonably short
-
-    for(let i = 0; i < artists.length && candidates.length < 90; i += CHUNK_SIZE){
-      const chunk = artists.slice(i, i + CHUNK_SIZE);
-      // Postgrest OR syntax needs literal commas between conditions, so artists
-      // containing a comma (rare) are skipped from batching and looked up individually below.
-      const batchable = chunk.filter(a => !a.includes(","));
-      const skipped = chunk.filter(a => a.includes(","));
-
-      if(batchable.length > 0){
-        const orClause = batchable.map(a => `artist.ilike.${encodeURIComponent(`*${a}*`)}`).join(",");
-        const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/karafun_catalog?select=title,artist&or=(${orClause})&limit=200&order=artist.asc`,
-          {headers: HEADERS}
-        );
-        if(res.ok){
-          const rows = await res.json();
-          rows.forEach(r=>{
-            const matchedArtist = batchable.find(a => (r.artist||"").toLowerCase().includes(a.toLowerCase()));
-            if(!matchedArtist) return;
-            const key = `${(r.title||"").toLowerCase()}|${(r.artist||"").toLowerCase()}`;
-            const normKey = `${normalizeForMatch(r.title)}|${normalizeForMatch(r.artist)}`;
-            if(known.has(key) || seenKeys.has(key) || dismissed.has(normKey)) return;
-            const seed = seedByName.get(matchedArtist.toLowerCase());
-            const cap = seed ? seed.cap : 10;
-            if((perArtistCount[matchedArtist]||0) >= cap) return;
-            perArtistCount[matchedArtist] = (perArtistCount[matchedArtist]||0) + 1;
-            seenKeys.add(key);
-            candidates.push({...r, sourceArtist: matchedArtist, sourceLabel: seed ? seed.label : `By ${matchedArtist}`});
-          });
-        }
-      }
-
-      for(const artist of skipped){
-        if(candidates.length >= 90) break;
-        const term = `*${artist}*`;
-        const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/karafun_catalog?select=title,artist&artist=ilike.${encodeURIComponent(term)}&limit=10&order=title.asc`,
-          {headers: HEADERS}
-        );
-        if(!res.ok) continue;
-        const rows = await res.json();
-        const seed = seedByName.get(artist.toLowerCase());
-        rows.forEach(r=>{
-          const key = `${(r.title||"").toLowerCase()}|${(r.artist||"").toLowerCase()}`;
-          const normKey = `${normalizeForMatch(r.title)}|${normalizeForMatch(r.artist)}`;
-          if(known.has(key) || seenKeys.has(key) || dismissed.has(normKey)) return;
-          seenKeys.add(key);
-          candidates.push({...r, sourceArtist: artist, sourceLabel: seed ? seed.label : `By ${artist}`});
-        });
-      }
-    }
+    const solidCandidates = await fetchTierCandidates(seeds.filter(s=>s.type==="solid"), TIER_BUDGETS.solid, known, dismissed, seenKeys);
+    const genreCandidates = await fetchTierCandidates(seeds.filter(s=>s.type==="genre"), TIER_BUDGETS.genre, known, dismissed, seenKeys);
+    const similarCandidates = await fetchTierCandidates(seeds.filter(s=>s.type==="similar"), TIER_BUDGETS.similar, known, dismissed, seenKeys);
+    const candidates = interleaveTiers([solidCandidates, genreCandidates, similarCandidates]);
 
     // Gate every candidate on vocal range before it's shown for consideration.
     const rangeMap = await fetchSongRanges();
