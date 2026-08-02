@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "15";
+const BUILD_VERSION = "16";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -2239,6 +2239,53 @@ function closeSettings(){
 document.getElementById("btnSettingsClose").onclick = closeSettings;
 settingsBackdrop.onclick = closeSettings;
 
+// Admin sheet — only reachable at all if adminBtnWrap was revealed by
+// loadProfileRange() (i.e. profiles.is_admin was true for this user), but
+// the button click handler is still gated on `isAdmin` as a second check
+// since it's cheap insurance against the wrapper ever being shown stale.
+const adminBackdrop = document.getElementById("adminBackdrop");
+const adminSheet = document.getElementById("adminSheet");
+function closeAdmin(){
+  adminBackdrop.classList.remove("open");
+  adminSheet.classList.remove("open");
+}
+document.getElementById("adminBtn").onclick = () => {
+  if(!isAdmin) return;
+  document.getElementById("testEmailResult").style.display = "none";
+  adminBackdrop.classList.add("open");
+  adminSheet.classList.add("open");
+};
+document.getElementById("btnAdminClose").onclick = closeAdmin;
+adminBackdrop.onclick = closeAdmin;
+enableSwipeToDismiss(adminSheet, closeAdmin);
+
+document.getElementById("genTestEmailBtn").onclick = async () => {
+  if(!currentUserEmail || !currentUserEmail.includes("@")){
+    showToast("No signed-in email found");
+    return;
+  }
+  const [local, domain] = currentUserEmail.split("@");
+  // Gmail (and most modern providers) ignore anything after a "+" in the
+  // local part for delivery purposes but treat the full address as
+  // distinct for account purposes — so mail keeps landing in the same
+  // inbox while Supabase Auth sees a brand new user.
+  const testEmail = `${local}+test${Date.now()}@${domain}`;
+
+  const outputEl = document.getElementById("testEmailOutput");
+  const resultEl = document.getElementById("testEmailResult");
+  outputEl.value = testEmail;
+  resultEl.style.display = "block";
+
+  let copied = false;
+  try{ await navigator.clipboard.writeText(testEmail); copied = true; }catch(e){ /* fall back to manual copy below */ }
+  showToast(copied ? "Test email copied" : "Generated — tap Copy below");
+};
+document.getElementById("testEmailCopyBtn").onclick = () => {
+  const outputEl = document.getElementById("testEmailOutput");
+  outputEl.select();
+  try{ document.execCommand("copy"); showToast("Copied"); }catch(e){ showToast("Select the text above and copy it manually"); }
+};
+
 document.getElementById("rangeModeAutoBtn").onclick = async () => {
   currentRangeMode = "auto";
   renderRangeModeUI("auto");
@@ -2498,6 +2545,8 @@ enableSwipeToDismiss(document.getElementById("settingsSheet"), closeSettings);
 const authBackdrop = document.getElementById("authBackdrop");
 const authSheet = document.getElementById("authSheet");
 let signedIn = false;
+let currentUserEmail = null;
+let isAdmin = false;
 
 async function onSignedIn(session){
   if(signedIn) return; // guard against double-init if the auth event fires twice
@@ -2509,6 +2558,7 @@ async function onSignedIn(session){
 
   const emailEl = document.getElementById("accountEmail");
   if(emailEl) emailEl.textContent = session.user.email;
+  currentUserEmail = session.user.email;
 
   await loadProfileRange(session.user.id);
 
@@ -2554,6 +2604,9 @@ async function loadProfileRange(userId){
     }
 
     if(!profile) return;
+
+    isAdmin = !!profile.is_admin;
+    document.getElementById("adminBtnWrap").style.display = isAdmin ? "" : "none";
 
     currentRangeMode = profile.range_mode === "auto" ? "auto" : "manual";
 

@@ -62,6 +62,10 @@
           <button class="gear-btn" id="recBtn" aria-label="Recommendations">✨</button>
           <span class="icon-btn-label">Recs</span>
         </div>
+        <div class="icon-btn-wrap" id="adminBtnWrap" style="display:none;">
+          <button class="gear-btn" id="adminBtn" aria-label="Admin">🛠</button>
+          <span class="icon-btn-label">Admin</span>
+        </div>
         <div class="icon-btn-wrap">
           <button class="gear-btn" id="settingsBtn" aria-label="Settings">⚙</button>
           <span class="icon-btn-label">Settings</span>
@@ -358,9 +362,33 @@
   </div>
 </div>
 
+<div class="sheet-backdrop" id="adminBackdrop"></div>
+<div class="sheet" id="adminSheet">
+  <h2>Admin</h2>
+
+  <div class="settings-section-label">Test accounts</div>
+  <div class="field">
+    <label>GENERATE A TEST ACCOUNT EMAIL</label>
+    <div class="artist" style="margin-bottom:10px;">
+      Uses your own inbox via Gmail's "+tag" trick — mail still lands in
+      your real inbox (including the magic link), but Supabase treats it
+      as a brand new account for sign-in and testing.
+    </div>
+    <button class="check-missing-btn" id="genTestEmailBtn">Generate test account email</button>
+    <div id="testEmailResult" style="display:none; margin-top:10px;">
+      <input type="text" id="testEmailOutput" readonly style="width:100%; margin-bottom:8px;">
+      <button class="ask-claude-copy-btn" id="testEmailCopyBtn">Copy</button>
+    </div>
+  </div>
+
+  <div class="sheet-actions">
+    <button class="btn-cancel" id="btnAdminClose" style="flex:1;">Done</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=15"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>
