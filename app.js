@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "14";
+const BUILD_VERSION = "15";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -1355,29 +1355,35 @@ async function buildSeedArtists(solidSongs){
   }
 
   // Last.fm similar artists — optional, only runs if a key is saved.
+  // Similar artists via Last.fm, proxied through a Supabase Edge Function
+  // so the API key lives server-side (one shared key for the whole app)
+  // instead of requiring every signed-in user to get and paste their own.
   // Anchored on your *most*-represented solid artists (your signature
   // sound), not the ascending backfill order above — "similar to the
   // artist you're only solid on once" is a much weaker signal than
   // "similar to the artist you have eight solid songs for."
-  const lastfmKey = loadLastfmKey();
-  if(lastfmKey && solidArtistNames.length > 0){
+  if(solidArtistNames.length > 0){
     const topArtists = [...solidArtistNames].sort((a, b) => artistCounts[b] - artistCounts[a]).slice(0, 8);
-    for(const artist of topArtists){
-      try{
-        const url = `https://ws.audioscrobbler.com/2.0/?method=artist.getsimilar&artist=${encodeURIComponent(artist)}&api_key=${encodeURIComponent(lastfmKey)}&format=json&limit=5`;
-        const res = await fetch(url);
-        if(!res.ok) continue;
+    try{
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/similar-artists`, {
+        method: "POST",
+        headers: HEADERS,
+        body: JSON.stringify({artists: topArtists, limitPerArtist: 5})
+      });
+      if(res.ok){
         const data = await res.json();
-        const matches = (data.similarartists && data.similarartists.artist) || [];
-        matches.forEach(m=>{
-          const name = (m.name || "").trim();
-          if(!name || seenArtistKeys.has(name.toLowerCase())) return;
-          seenArtistKeys.add(name.toLowerCase());
-          seeds.push({name, type:"similar", cap:4, label:`Similar to ${artist} (Last.fm)`});
+        const resultsByArtist = data.results || {};
+        topArtists.forEach(artist=>{
+          const names = resultsByArtist[artist] || [];
+          names.forEach(name=>{
+            if(!name || seenArtistKeys.has(name.toLowerCase())) return;
+            seenArtistKeys.add(name.toLowerCase());
+            seeds.push({name, type:"similar", cap:4, label:`Similar to ${artist} (Last.fm)`});
+          });
         });
-      }catch(e){
-        // A Last.fm hiccup shouldn't block genre/solid recommendations.
       }
+    }catch(e){
+      // A Last.fm/Edge Function hiccup shouldn't block genre/solid recommendations.
     }
   }
 
@@ -2098,19 +2104,6 @@ function loadTheme(){
   applyTheme(saved);
 }
 
-// Last.fm API key — kept client-side only (localStorage), same as theme
-// choice, since it's a personal credential with no per-user server-side
-// home in this app's schema and no need to sync across devices.
-function loadLastfmKey(){
-  try{ return localStorage.getItem("songbook-lastfm-key") || ""; }catch(e){ return ""; }
-}
-function saveLastfmKey(key){
-  try{
-    if(key) localStorage.setItem("songbook-lastfm-key", key);
-    else localStorage.removeItem("songbook-lastfm-key");
-  }catch(e){}
-}
-
 function renderThemeGrid(){
   const grid = document.getElementById("themeGrid");
   const current = document.body.dataset.theme || "jukebox";
@@ -2236,13 +2229,8 @@ document.getElementById("settingsBtn").onclick = () => {
   renderThemeGrid();
   document.getElementById("missingResults").innerHTML = "";
   renderRangeModeUI(currentRangeMode);
-  document.getElementById("rLastfmKey").value = loadLastfmKey();
   settingsBackdrop.classList.add("open");
   settingsSheet.classList.add("open");
-};
-document.getElementById("saveLastfmKeyBtn").onclick = () => {
-  saveLastfmKey(document.getElementById("rLastfmKey").value.trim());
-  showToast("Last.fm key saved");
 };
 function closeSettings(){
   settingsBackdrop.classList.remove("open");
