@@ -2252,6 +2252,7 @@ function closeAdmin(){
 document.getElementById("adminBtn").onclick = () => {
   if(!isAdmin) return;
   document.getElementById("testEmailResult").style.display = "none";
+  document.getElementById("testEmailName").value = "";
   adminBackdrop.classList.add("open");
   adminSheet.classList.add("open");
 };
@@ -2264,21 +2265,50 @@ document.getElementById("genTestEmailBtn").onclick = async () => {
     showToast("No signed-in email found");
     return;
   }
+  const nameEl = document.getElementById("testEmailName");
+  // Slug the entered name down to something safe for an email local-part:
+  // lowercase, alphanumeric only, spaces/punctuation collapsed to hyphens.
+  const slug = nameEl.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  if(!slug){
+    showToast("Enter a name for the +tag first");
+    nameEl.focus();
+    return;
+  }
+
   const [local, domain] = currentUserEmail.split("@");
   // Gmail (and most modern providers) ignore anything after a "+" in the
   // local part for delivery purposes but treat the full address as
   // distinct for account purposes — so mail keeps landing in the same
   // inbox while Supabase Auth sees a brand new user.
-  const testEmail = `${local}+test${Date.now()}@${domain}`;
+  const testEmail = `${local}+${slug}@${domain}`;
 
   const outputEl = document.getElementById("testEmailOutput");
   const resultEl = document.getElementById("testEmailResult");
   outputEl.value = testEmail;
   resultEl.style.display = "block";
 
+  const btn = document.getElementById("genTestEmailBtn");
+  btn.disabled = true;
+  btn.textContent = "Sending…";
+
+  // Fire the same sign-in call the real login form uses, so the magic
+  // link / OTP code actually lands in the inbox for this test address.
+  const { error } = await authClient.auth.signInWithOtp({
+    email: testEmail,
+    options: { emailRedirectTo: window.location.origin + window.location.pathname }
+  });
+
+  btn.disabled = false;
+  btn.textContent = "Generate & send login email";
+
+  if(error){
+    showToast(`Send failed: ${error.message}`);
+    return;
+  }
+
   let copied = false;
   try{ await navigator.clipboard.writeText(testEmail); copied = true; }catch(e){ /* fall back to manual copy below */ }
-  showToast(copied ? "Test email copied" : "Generated — tap Copy below");
+  showToast(copied ? "Login email sent — address copied" : "Login email sent — tap Copy below");
 };
 document.getElementById("testEmailCopyBtn").onclick = () => {
   const outputEl = document.getElementById("testEmailOutput");

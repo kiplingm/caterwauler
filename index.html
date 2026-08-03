@@ -374,7 +374,8 @@
       your real inbox (including the magic link), but Supabase treats it
       as a brand new account for sign-in and testing.
     </div>
-    <button class="check-missing-btn" id="genTestEmailBtn">Generate test account email</button>
+    <input type="text" id="testEmailName" placeholder="Name for the +tag, e.g. bob" style="width:100%; margin-bottom:8px;">
+    <button class="check-missing-btn" id="genTestEmailBtn">Generate &amp; send login email</button>
     <div id="testEmailResult" style="display:none; margin-top:10px;">
       <input type="text" id="testEmailOutput" readonly style="width:100%; margin-bottom:8px;">
       <button class="ask-claude-copy-btn" id="testEmailCopyBtn">Copy</button>
