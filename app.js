@@ -2663,11 +2663,9 @@ async function loadProfileRange(userId){
   }
 }
 
-document.getElementById("authSendBtn").onclick = async () => {
-  const email = document.getElementById("authEmail").value.trim();
+async function sendLoginEmail(email){
   const errEl = document.getElementById("authError");
   errEl.style.display = "none";
-  if(!email) return;
 
   const btn = document.getElementById("authSendBtn");
   btn.disabled = true;
@@ -2684,13 +2682,29 @@ document.getElementById("authSendBtn").onclick = async () => {
   if(error){
     errEl.textContent = error.message;
     errEl.style.display = "block";
-  }else{
-    lastAuthEmail = email;
-    document.getElementById("authFormView").style.display = "none";
-    document.getElementById("authSentView").style.display = "block";
-    document.getElementById("authCode").value = "";
-    document.getElementById("authCodeError").style.display = "none";
+    return false;
   }
+
+  // Remember the un-tagged root address so future "?u=name" shortcut links
+  // know which inbox/domain to build test-account addresses against —
+  // only the bare address counts, not a "+tag" one, so re-visiting a
+  // shortcut doesn't overwrite the real root email.
+  if(!email.includes("+")){
+    try{ localStorage.setItem("ss_base_email", email); }catch(e){ /* ignore */ }
+  }
+
+  lastAuthEmail = email;
+  document.getElementById("authFormView").style.display = "none";
+  document.getElementById("authSentView").style.display = "block";
+  document.getElementById("authCode").value = "";
+  document.getElementById("authCodeError").style.display = "none";
+  return true;
+}
+
+document.getElementById("authSendBtn").onclick = async () => {
+  const email = document.getElementById("authEmail").value.trim();
+  if(!email) return;
+  await sendLoginEmail(email);
 };
 
 // Fallback for the case where tapping the emailed link doesn't land in the
@@ -2739,11 +2753,43 @@ document.getElementById("authUseDifferentBtn").onclick = () => {
   // resuming your session. Strip the param right after so a page refresh
   // doesn't keep forcing a sign-out.
   const params = new URLSearchParams(window.location.search);
+
+  authClient.auth.onAuthStateChange((_event, newSession) => {
+    if(newSession && !signedIn){
+      onSignedIn(newSession);
+    }
+  });
+
   if(params.get("new") === "1"){
     await authClient.auth.signOut();
     params.delete("new");
     const cleanUrl = window.location.pathname + (params.toString() ? "?" + params.toString() : "");
     window.history.replaceState({}, "", cleanUrl);
+  }
+
+  // A "?u=name" link is a per-person shortcut — e.g. a Home Screen icon
+  // pointing at "?u=bob" always signs out of whatever's currently active
+  // and auto-sends a login email to "you+bob@yourdomain", using the root
+  // address remembered from the last time you signed in with your real
+  // (un-tagged) email. Left in the URL (not stripped) so the same icon
+  // works identically every time it's tapped.
+  const uName = params.get("u");
+  if(uName){
+    await authClient.auth.signOut();
+    let base = null;
+    try{ base = localStorage.getItem("ss_base_email"); }catch(e){ /* ignore */ }
+    authBackdrop.classList.add("open");
+    authSheet.classList.add("open");
+    if(base && base.includes("@")){
+      const [local, domain] = base.split("@");
+      const slug = uName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+      const targetEmail = slug ? `${local}+${slug}@${domain}` : base;
+      document.getElementById("authEmail").value = targetEmail;
+      await sendLoginEmail(targetEmail);
+    }else{
+      showToast("Sign in with your real email once, then shortcut links will work");
+    }
+    return;
   }
 
   const { data: { session } } = await authClient.auth.getSession();
@@ -2753,10 +2799,4 @@ document.getElementById("authUseDifferentBtn").onclick = () => {
     authBackdrop.classList.add("open");
     authSheet.classList.add("open");
   }
-
-  authClient.auth.onAuthStateChange((_event, newSession) => {
-    if(newSession && !signedIn){
-      onSignedIn(newSession);
-    }
-  });
 })();
