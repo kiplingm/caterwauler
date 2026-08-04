@@ -401,6 +401,19 @@
   }
   .sheet-actions{display:flex; gap:10px; margin-top:16px;}
   .sheet-actions button{flex:1; padding:12px 0; border-radius:10px; font-weight:700; font-size:14px; border:none;}
+
+  .sheet-tutorial{max-height:92vh; padding-top:36px;}
+  .tutorial-skip{
+    position:absolute; top:16px; right:18px; background:none; border:none;
+    color:var(--cream-dim); font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:0.3px;
+  }
+  .tutorial-slide{min-height:220px; display:flex; flex-direction:column; justify-content:center; text-align:center; padding:10px 4px;}
+  .tutorial-slide-emoji{font-size:40px; margin-bottom:14px;}
+  .tutorial-slide h3{font-family:'Bebas Neue',sans-serif; font-size:24px; color:var(--gold); letter-spacing:0.5px; margin:0 0 12px;}
+  .tutorial-slide p{font-family:'IBM Plex Mono',monospace; font-size:13px; line-height:1.6; color:var(--cream-dim); margin:0;}
+  .tutorial-dots{display:flex; justify-content:center; gap:8px; margin-top:8px;}
+  .tutorial-dot{width:7px; height:7px; border-radius:50%; background:var(--line);}
+  .tutorial-dot.active{background:var(--gold);}
   .btn-save{background:var(--gold); color:#1c1420;}
   .btn-cancel{background:transparent; border:1px solid var(--line) !important; color:var(--cream-dim);}
   .btn-delete-song{

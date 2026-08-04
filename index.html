@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>Setlist Sherpa</title>
-<link rel="stylesheet" href="styles.css?v=12">
+<link rel="stylesheet" href="styles.css?v=13">
 </head>
 <body>
 
@@ -69,6 +69,10 @@
         <div class="icon-btn-wrap">
           <button class="gear-btn" id="settingsBtn" aria-label="Settings">⚙</button>
           <span class="icon-btn-label">Settings</span>
+        </div>
+        <div class="icon-btn-wrap">
+          <button class="gear-btn" id="helpBtn" aria-label="Help">?</button>
+          <span class="icon-btn-label">Help</span>
         </div>
       </div>
     </div>
@@ -377,9 +381,116 @@
   </div>
 </div>
 
+<div class="sheet-backdrop" id="helpBackdrop"></div>
+<div class="sheet" id="helpSheet">
+  <h2>Help</h2>
+
+  <div class="settings-section-label">Getting started</div>
+  <div class="field">
+    <div class="artist">
+      Add songs in the Songbook tab, give each one a status, and set your
+      vocal range in Settings. Everything else — Sing Now, fit coloring,
+      Recommendations — builds on those three things.
+    </div>
+    <button class="check-missing-btn" id="replayTutorialBtn" style="margin-top:10px;">Replay the quick-start tour</button>
+  </div>
+
+  <div class="settings-section-label">Sing Now vs. Songbook</div>
+  <div class="field">
+    <div class="artist">
+      <strong>Sing Now</strong> is the home screen — a short, changing list
+      of your Solid songs, favoring ones you haven't sung in a while. It's
+      built for picking your next song live at karaoke, one-handed.
+      <br><br>
+      <strong>Songbook</strong> is everything: search, filter by status,
+      sort by fit or note. That's where you add, edit, and manage songs.
+    </div>
+  </div>
+
+  <div class="settings-section-label">Song statuses</div>
+  <div class="field">
+    <div class="artist">
+      <strong>Solid</strong> — ready to sing tonight. Feeds Sing Now, your
+      auto vocal range, and Recommendations.<br>
+      <strong>Learning</strong> — actively working on it.<br>
+      <strong>Maybe</strong> — an uncertain candidate, not committed yet.<br>
+      <strong>Suggested</strong> — came from Recommendations, not yet reviewed.<br>
+      <strong>Retired</strong> — used to sing it, not anymore. Kept for history.
+    </div>
+  </div>
+
+  <div class="settings-section-label">Vocal range</div>
+  <div class="field">
+    <div class="artist">
+      Set in Settings, two ways: <strong>Auto</strong> calculates your
+      range from your Solid songs' known low/high notes — it needs a few
+      Solid songs with ranges filled in before it can compute anything.
+      <strong>Manual</strong> lets you type your own low/high notes directly.
+      <br><br>
+      Once a range is set, every song shows a colored bar: green means
+      it's within your range, red means it isn't. Until you set one, songs
+      show "your range not set" instead of a guess.
+    </div>
+  </div>
+
+  <div class="settings-section-label">The "K" badge</div>
+  <div class="field">
+    <div class="artist">
+      A gold "K" next to a title means that song is confirmed available in
+      the KaraFun catalog — so you know it's actually playable at a
+      KaraFun-powered karaoke night, not just something you'd like to sing.
+    </div>
+  </div>
+
+  <div class="settings-section-label">Recommendations</div>
+  <div class="field">
+    <div class="artist">
+      Tap the ✨ icon for new song ideas, pulled three ways: more from
+      artists you're already Solid on, other artists sharing a genre tag
+      with your Solid songs, and — if configured — artists genuinely
+      similar to your Solid artists via Last.fm. Every suggestion is
+      checked against your vocal range before it's shown; anything without
+      a researched range yet is left out and flagged separately.
+    </div>
+  </div>
+
+  <div class="settings-section-label">Setlists</div>
+  <div class="field">
+    <div class="artist">
+      Tap the 🎤 icon to build a named setlist for a specific gig — pick
+      songs from your Songbook, reorder them, and have a plan ready before
+      you walk in.
+    </div>
+  </div>
+
+  <div class="settings-section-label">Logging performances</div>
+  <div class="field">
+    <div class="artist">
+      Tap "Sing it" on Sing Now, or log manually from a song's card in the
+      Songbook. Performance history is what powers "last played" and keeps
+      Sing Now rotating instead of repeating your favorites every night.
+    </div>
+  </div>
+
+  <div class="sheet-actions">
+    <button class="btn-cancel" id="btnHelpClose" style="flex:1;">Done</button>
+  </div>
+</div>
+
+<div class="sheet-backdrop" id="tutorialBackdrop"></div>
+<div class="sheet sheet-tutorial" id="tutorialSheet">
+  <button class="tutorial-skip" id="tutorialSkipBtn">Skip</button>
+  <div class="tutorial-slide" id="tutorialSlideBody"></div>
+  <div class="tutorial-dots" id="tutorialDots"></div>
+  <div class="sheet-actions">
+    <button class="btn-cancel" id="tutorialBackBtn" style="flex:1;">Back</button>
+    <button class="btn-save" id="tutorialNextBtn" style="flex:1;">Next</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=17"></script>
+<script src="app.js?v=18"></script>
 </body>
 </html>

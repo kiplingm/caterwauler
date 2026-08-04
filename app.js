@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "17";
+const BUILD_VERSION = "18";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -2240,6 +2240,104 @@ document.getElementById("btnAdminClose").onclick = closeAdmin;
 adminBackdrop.onclick = closeAdmin;
 enableSwipeToDismiss(adminSheet, closeAdmin);
 
+// Help sheet — plain reference doc, always available, no admin gate.
+const helpBackdrop = document.getElementById("helpBackdrop");
+const helpSheet = document.getElementById("helpSheet");
+function closeHelp(){
+  helpBackdrop.classList.remove("open");
+  helpSheet.classList.remove("open");
+}
+document.getElementById("helpBtn").onclick = () => {
+  helpBackdrop.classList.add("open");
+  helpSheet.classList.add("open");
+};
+document.getElementById("btnHelpClose").onclick = closeHelp;
+helpBackdrop.onclick = closeHelp;
+enableSwipeToDismiss(helpSheet, closeHelp);
+
+// First-run quick-start tutorial — a short slide carousel shown once
+// automatically after a brand new sign-in (see onSignedIn), and
+// replayable anytime from the Help sheet. "Seen" state is a plain
+// localStorage flag, same pattern as theme choice: purely a per-device
+// UI nicety, no need to sync across devices or live in profiles.
+const TUTORIAL_SEEN_KEY = "ss-tutorial-seen";
+const TUTORIAL_SLIDES = [
+  {
+    emoji: "🎤",
+    title: "Welcome to Setlist Sherpa",
+    body: "Track your karaoke songbook, know what's actually in your vocal range, and always have a great pick ready. This takes about a minute."
+  },
+  {
+    emoji: "📋",
+    title: "Add songs, mark your status",
+    body: "Add songs from the Songbook tab. Every song gets a status — Solid, Learning, Maybe, Suggested, or Retired. Solid is the one that matters most: it drives everything else."
+  },
+  {
+    emoji: "📏",
+    title: "Set your vocal range",
+    body: "In Settings, choose Auto (calculated from your Solid songs) or Manual (type your own). Once it's set, every song shows whether it's in range — green means go, red means it's a stretch."
+  },
+  {
+    emoji: "✨",
+    title: "Sing Now — your next pick",
+    body: "This is the home screen: a short list of Solid songs picked for you, favoring ones you haven't sung in a while. Tap \"Sing it\" to log a performance right from there."
+  },
+  {
+    emoji: "🔎",
+    title: "Discover more",
+    body: "Recommendations (✨) suggests new songs from artists you're already solid on. Setlists (🎤) let you plan ahead for a specific gig. Both are up top, next to Settings."
+  }
+];
+let tutorialStep = 0;
+const tutorialBackdrop = document.getElementById("tutorialBackdrop");
+const tutorialSheet = document.getElementById("tutorialSheet");
+
+function renderTutorialSlide(){
+  const slide = TUTORIAL_SLIDES[tutorialStep];
+  document.getElementById("tutorialSlideBody").innerHTML = `
+    <div class="tutorial-slide-emoji">${slide.emoji}</div>
+    <h3>${slide.title}</h3>
+    <p>${slide.body}</p>
+  `;
+  document.getElementById("tutorialDots").innerHTML = TUTORIAL_SLIDES
+    .map((_, i) => `<div class="tutorial-dot${i === tutorialStep ? " active" : ""}"></div>`)
+    .join("");
+  const backBtn = document.getElementById("tutorialBackBtn");
+  const nextBtn = document.getElementById("tutorialNextBtn");
+  backBtn.style.visibility = tutorialStep === 0 ? "hidden" : "visible";
+  nextBtn.textContent = tutorialStep === TUTORIAL_SLIDES.length - 1 ? "Let's go!" : "Next";
+}
+
+function openTutorial(){
+  tutorialStep = 0;
+  renderTutorialSlide();
+  tutorialBackdrop.classList.add("open");
+  tutorialSheet.classList.add("open");
+}
+function closeTutorial(){
+  tutorialBackdrop.classList.remove("open");
+  tutorialSheet.classList.remove("open");
+  try{ localStorage.setItem(TUTORIAL_SEEN_KEY, "1"); }catch(e){}
+}
+document.getElementById("tutorialSkipBtn").onclick = closeTutorial;
+document.getElementById("tutorialBackBtn").onclick = () => {
+  if(tutorialStep === 0) return;
+  tutorialStep--;
+  renderTutorialSlide();
+};
+document.getElementById("tutorialNextBtn").onclick = () => {
+  if(tutorialStep === TUTORIAL_SLIDES.length - 1){
+    closeTutorial();
+    return;
+  }
+  tutorialStep++;
+  renderTutorialSlide();
+};
+document.getElementById("replayTutorialBtn").onclick = () => {
+  closeHelp();
+  openTutorial();
+};
+
 document.getElementById("genTestEmailBtn").onclick = async () => {
   if(!currentUserEmail || !currentUserEmail.includes("@")){
     showToast("No signed-in email found");
@@ -2576,6 +2674,10 @@ async function onSignedIn(session){
       });
     }
   }
+
+  let tutorialSeen = false;
+  try{ tutorialSeen = localStorage.getItem(TUTORIAL_SEEN_KEY) === "1"; }catch(e){}
+  if(!tutorialSeen) openTutorial();
 }
 
 async function loadProfileRange(userId){
