@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "16";
+const BUILD_VERSION = "17";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -36,21 +36,22 @@ const authClient = supabase.createClient(SUPABASE_URL, PUBLISHABLE_KEY);
 // knows which email to verify against without asking the user to retype it.
 let lastAuthEmail = null;
 
-// Vocal range — now loaded per-user from the `profiles` table after
-// sign-in (see loadProfileRange()) instead of hardcoded. These start as
-// reasonable fallback defaults and get reassigned via applyRange() once
-// the profile loads or the user saves a new range in Settings.
-let COMFORT_LOW = "A2", COMFORT_HIGH = "B4";
-let STRETCH_LOW = "G2", STRETCH_HIGH = "D5";
+// Vocal range — loaded per-user from the `profiles` table after sign-in
+// (see loadProfileRange()). Starts as null/unset rather than a hardcoded
+// fallback: a brand new user with an empty songbook has no computed range
+// yet, and showing a fake "A2-B4" as if it were real was misleading. The
+// UI treats COMFORT_LOW === null as "not calculated yet" throughout
+// (header, range strip, fit scoring) until either auto mode computes a
+// real one from Solid songs or the user saves one manually in Settings.
+let COMFORT_LOW = null, COMFORT_HIGH = null;
 // 'auto' (derived from Solid-status songs) or 'manual' (typed in directly).
 // Shared with the other karaoke-app project via the same profiles row.
 let currentRangeMode = "manual";
 // The last range the user typed in manually, kept separate from
-// COMFORT_LOW/HIGH etc. above so that switching to auto (which overwrites
+// COMFORT_LOW/HIGH above so that switching to auto (which overwrites
 // those active values) doesn't lose it — switching back to manual restores
-// from these instead of leaving whatever auto last computed.
+// from this instead of leaving whatever auto last computed.
 let manualComfortLow = null, manualComfortHigh = null;
-let manualStretchLow = null, manualStretchHigh = null;
 
 const NOTE_VALUES = {C:0,"C#":1,DB:1,D:2,"D#":3,EB:3,E:4,F:5,"F#":6,GB:6,G:7,"G#":8,AB:8,A:9,"A#":10,BB:10,B:11};
 
@@ -66,29 +67,25 @@ function noteToSemitone(note){
 
 let comfortLowS = noteToSemitone(COMFORT_LOW);
 let comfortHighS = noteToSemitone(COMFORT_HIGH);
-let stretchLowS = noteToSemitone(STRETCH_LOW);
-let stretchHighS = noteToSemitone(STRETCH_HIGH);
 
 function updateRangeLineDisplay(){
   const el = document.getElementById("rangeLine");
   if(el){
-    el.textContent =
-      `YOUR RANGE — COMFORT ${COMFORT_LOW}–${COMFORT_HIGH} · STRETCH ${STRETCH_LOW}–${STRETCH_HIGH}`;
+    el.textContent = (COMFORT_LOW && COMFORT_HIGH)
+      ? `YOUR RANGE — ${COMFORT_LOW}–${COMFORT_HIGH}`
+      : "YOUR RANGE — Not calculated yet. Mark a few songs Solid, or set one manually in Settings.";
   }
 }
 updateRangeLineDisplay();
 
 // Called after the profile loads post-sign-in, and after saving a new
 // range in Settings. Recomputes the derived semitone values and refreshes
-// both the header display and (via fetchSongs, called by the caller) fit
-// scoring across the songbook.
-function applyRange(comfortLow, comfortHigh, stretchLow, stretchHigh){
+// both the header display and (via the caller) fit scoring across the
+// songbook.
+function applyRange(comfortLow, comfortHigh){
   COMFORT_LOW = comfortLow; COMFORT_HIGH = comfortHigh;
-  STRETCH_LOW = stretchLow; STRETCH_HIGH = stretchHigh;
   comfortLowS = noteToSemitone(COMFORT_LOW);
   comfortHighS = noteToSemitone(COMFORT_HIGH);
-  stretchLowS = noteToSemitone(STRETCH_LOW);
-  stretchHighS = noteToSemitone(STRETCH_HIGH);
   updateRangeLineDisplay();
 }
 
@@ -165,7 +162,7 @@ function animateRemove(el, delay=200){
 
 function buildRangePrompt(missingSongs){
   const list = missingSongs.map(s => `- "${s.title}" by ${s.artist} (row id: ${s.id})`).join("\n");
-  return `Please research the vocal range (low and high note, e.g. "A2") for these songs from my karaoke tracker, then update them in my Supabase project (karaoke-prod, ref luykkuptcizkdigwness), table "songs", columns low_note/high_note, matched by each song's row id (not by title/artist alone — the table has other users' songs in it too):\n\n${list}\n\nFor context: my comfort range is ${COMFORT_LOW}–${COMFORT_HIGH} and my full stretch range is ${STRETCH_LOW}–${STRETCH_HIGH}.`;
+  return `Please research the vocal range (low and high note, e.g. "A2") for these songs from my karaoke tracker, then update them in my Supabase project (karaoke-prod, ref luykkuptcizkdigwness), table "songs", columns low_note/high_note, matched by each song's row id (not by title/artist alone — the table has other users' songs in it too):\n\n${list}\n\nFor context: my vocal range is ${COMFORT_LOW}–${COMFORT_HIGH}.`;
 }
 
 async function askClaude(promptText, boxEl){
@@ -233,9 +230,9 @@ async function fetchSongs(){
 }
 
 function fitLabel(lowS, highS){
+  if(comfortLowS === null || comfortHighS === null) return {cls:"fit-unknown", text:"○ YOUR RANGE NOT SET"};
   if(lowS===null || highS===null) return {cls:"fit-unknown", text:"○ RANGE NOT SET"};
-  if(lowS >= comfortLowS && highS <= comfortHighS) return {cls:"fit-easy", text:"✓ EASY FIT"};
-  if(lowS >= stretchLowS && highS <= stretchHighS) return {cls:"fit-stretch", text:"△ STRETCH"};
+  if(lowS >= comfortLowS && highS <= comfortHighS) return {cls:"fit-easy", text:"✓ IN RANGE"};
   return {cls:"fit-out", text:"✕ OUT OF RANGE"};
 }
 
@@ -281,8 +278,10 @@ function pickSingNowSongs(allSongs, options){
   return scored.slice(0, count).map(x => x.song);
 }
 
-// Lower score = better fit against comfort zone. Unknown ranges sort last.
+// Lower score = better fit against comfort zone. Unknown ranges (song's or
+// the user's own, if not set yet) sort last.
 function fitScore(low, high){
+  if(comfortLowS === null || comfortHighS === null) return Infinity;
   const lowS = noteToSemitone(low), highS = noteToSemitone(high);
   if(lowS===null || highS===null) return Infinity;
   const below = Math.max(0, comfortLowS - lowS);
@@ -298,7 +297,7 @@ function semitoneToNoteName(s){
 }
 
 // For an out-of-range song, suggest a semitone shift that best fits it into
-// the comfort zone (or failing that, the stretch zone).
+// the comfort zone.
 function suggestTransposition(lowS, highS){
   if(lowS===null || highS===null) return null;
   const songSpan = highS - lowS;
@@ -310,13 +309,6 @@ function suggestTransposition(lowS, highS){
     const shift = Math.round((minShift + maxShift) / 2);
     return {shift, zone: "comfort"};
   }
-  const stretchSpan = stretchHighS - stretchLowS;
-  if(songSpan <= stretchSpan){
-    const minShift = stretchLowS - lowS;
-    const maxShift = stretchHighS - highS;
-    const shift = Math.round((minShift + maxShift) / 2);
-    return {shift, zone: "stretch"};
-  }
   return {shift: 0, zone: "none"};
 }
 
@@ -325,16 +317,15 @@ function transpositionMessage(lowS, highS){
   if(!suggestion) return "";
   const {shift, zone} = suggestion;
   if(zone === "none"){
-    return "Spans more than your full range — no single key change fixes this one.";
+    return "Spans more than your range — no single key change fixes this one.";
   }
   const dir = shift > 0 ? "up" : shift < 0 ? "down" : null;
-  const zoneLabel = zone === "comfort" ? "an easy fit" : "your stretch range";
   if(!dir){
-    return `Already centered — this is as good as it gets in ${zoneLabel}.`;
+    return "Already centered — this is as good as it gets in your range.";
   }
   const newLow = semitoneToNoteName(lowS + shift);
   const newHigh = semitoneToNoteName(highS + shift);
-  return `Try shifting ${dir} ${Math.abs(shift)} semitone${Math.abs(shift)===1?"":"s"} (${newLow}–${newHigh}) for ${zoneLabel}.`;
+  return `Try shifting ${dir} ${Math.abs(shift)} semitone${Math.abs(shift)===1?"":"s"} (${newLow}–${newHigh}) to fit your range.`;
 }
 
 // Reads the active theme's brighter gradient-only colors as RGB triples,
@@ -359,31 +350,53 @@ function lerpColor(a, b, t){
 }
 
 // Builds the fixed background gradient for the range track: a saturated
-// "range finder" overlay that is red at the outer edges (beyond stretch),
-// gold across the stretch-only zone, and green across the comfort zone.
-// Position is the same on every card since it's derived from the user's
-// comfort/stretch settings, not from any individual song.
-function buildRangeOverlay(comfortLeft, comfortRight, stretchLeft, stretchRight){
+// "range finder" overlay that is red outside the comfort zone and green
+// within it. Position is the same on every card since it's derived from
+// the user's comfort range, not from any individual song.
+function buildRangeOverlay(comfortLeft, comfortRight){
   const c = getFitColors();
   const rgba = (rgb, a) => `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;
   return `linear-gradient(90deg,
     ${rgba(c.red,0.32)} 0%,
-    ${rgba(c.gold,0.24)} ${stretchLeft}%,
+    ${rgba(c.red,0.32)} ${comfortLeft}%,
     ${rgba(c.green,0.16)} ${comfortLeft}%,
     ${rgba(c.green,0.16)} ${comfortRight}%,
-    ${rgba(c.gold,0.24)} ${stretchRight}%,
+    ${rgba(c.red,0.32)} ${comfortRight}%,
     ${rgba(c.red,0.32)} 100%)`;
 }
 
 function renderRangeStrip(low, high, rangeSource){
   const lowS = noteToSemitone(low), highS = noteToSemitone(high);
-  const spanLow = stretchLowS - 2, spanHigh = stretchHighS + 2;
+  const fit = fitLabel(lowS, highS);
+
+  const sourceTag = (lowS!==null && highS!==null && rangeSource === "estimated")
+    ? `<span class="range-source-tag" title="Filled in as a best-guess estimate, not individually verified">est.</span>`
+    : (lowS!==null && highS!==null && rangeSource === "verified")
+    ? `<span class="range-source-tag range-source-verified" title="Checked against a specific vocal reference">✓ verified</span>`
+    : "";
+
+  // No comfort range set yet — skip the color-coded track entirely rather
+  // than drawing a misleading one against a range nobody chose.
+  if(comfortLowS === null || comfortHighS === null){
+    return `
+      <div class="range-strip">
+        <div class="range-track range-track-unset"></div>
+        <div class="range-labels"><span>Set your range in Settings</span></div>
+        <div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${sourceTag}</div>
+      </div>`;
+  }
+
+  // Pad the visual span a few semitones past comfort on each side, but
+  // widen further if this particular song's own range falls outside that
+  // padding so it doesn't get invisibly clipped at the track's edge.
+  let spanLow = comfortLowS - 4, spanHigh = comfortHighS + 4;
+  if(lowS !== null) spanLow = Math.min(spanLow, lowS - 1);
+  if(highS !== null) spanHigh = Math.max(spanHigh, highS + 1);
   const span = spanHigh - spanLow;
   const pct = v => Math.max(0, Math.min(100, ((v - spanLow)/span)*100));
 
   const comfortLeft = pct(comfortLowS), comfortRight = pct(comfortHighS);
-  const stretchLeft = pct(stretchLowS), stretchRight = pct(stretchHighS);
-  const overlay = buildRangeOverlay(comfortLeft, comfortRight, stretchLeft, stretchRight);
+  const overlay = buildRangeOverlay(comfortLeft, comfortRight);
 
   let songLine = "";
   if(lowS!==null && highS!==null){
@@ -391,14 +404,8 @@ function renderRangeStrip(low, high, rangeSource){
     const width = Math.max(r-l, 2.5);
     songLine = `<div class="range-song-line" style="left:${l}%; width:${width}%;"></div>`;
   }
-  const fit = fitLabel(lowS, highS);
   const suggestionHtml = fit.cls === "fit-out"
     ? `<span class="transpose-suggestion">${transpositionMessage(lowS, highS)}</span>`
-    : "";
-  const sourceTag = (lowS!==null && highS!==null && rangeSource === "estimated")
-    ? `<span class="range-source-tag" title="Filled in as a best-guess estimate, not individually verified">est.</span>`
-    : (lowS!==null && highS!==null && rangeSource === "verified")
-    ? `<span class="range-source-tag range-source-verified" title="Checked against a specific vocal reference">✓ verified</span>`
     : "";
   return `
     <div class="range-strip">
@@ -408,7 +415,7 @@ function renderRangeStrip(low, high, rangeSource){
         <div class="range-bound" style="left:${comfortRight}%;"></div>
         ${songLine}
       </div>
-      <div class="range-labels"><span>${STRETCH_LOW}</span><span>${STRETCH_HIGH}</span></div>
+      <div class="range-labels"><span>${COMFORT_LOW}</span><span>${COMFORT_HIGH}</span></div>
       <div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${sourceTag}${suggestionHtml}</div>
     </div>`;
 }
@@ -1509,7 +1516,7 @@ async function openRecommendations(){
     // Gate every candidate on vocal range before it's shown for consideration.
     const rangeMap = await fetchSongRanges();
     const fitResults = [];
-    const stretchResults = [];
+    const outOfRangeResults = [];
     const unconfirmedSongs = [];
     candidates.forEach(c=>{
       const rangeRow = rangeMap.get(`${normalizeForMatch(c.title)}|${normalizeForMatch(c.artist)}`);
@@ -1517,17 +1524,15 @@ async function openRecommendations(){
       const lowS = noteToSemitone(rangeRow.low_note), highS = noteToSemitone(rangeRow.high_note);
       const fit = fitLabel(lowS, highS);
       const enriched = {...c, low_note: rangeRow.low_note, high_note: rangeRow.high_note, fit};
-      if(fit.cls === "fit-easy" || fit.cls === "fit-stretch"){
+      if(fit.cls === "fit-easy"){
         fitResults.push(enriched);
       }else if(fit.cls === "fit-out"){
         enriched.transposeMsg = transpositionMessage(lowS, highS);
-        stretchResults.push(enriched);
+        outOfRangeResults.push(enriched);
       }
       // fit-unknown (no range data) is the only case excluded from consideration.
     });
-    fitResults.sort((a,b)=> (a.fit.cls === b.fit.cls) ? 0 : (a.fit.cls === "fit-easy" ? -1 : 1));
-
-    renderRecommendations(fitResults, stretchResults, unconfirmedSongs);
+    renderRecommendations(fitResults, outOfRangeResults, unconfirmedSongs);
   }catch(err){
     listEl.innerHTML = `<div class="rec-empty">Couldn't load recommendations: ${err.message}</div>`;
   }
@@ -2142,28 +2147,8 @@ function computeAutoRange(){
   });
   if(!lowest || !highest) return null;
 
-  // Stretch zone: rather than a flat assumed pad, look at what you've
-  // actually attempted — Learning (actively working on) and Maybe
-  // (uncertain candidates) songs — and let real evidence set how far
-  // stretch extends past comfort in each direction. Falls back to the old
-  // 3-semitone heuristic only if there's no such evidence yet, so
-  // "stretch" still means something rather than collapsing to comfort's
-  // width.
-  let stretchLowS = lowest.semitone, stretchHighS = highest.semitone;
-  songs.forEach(s => {
-    if(s.status !== "Learning" && s.status !== "Maybe") return;
-    const lowS = noteToSemitone(s.low_note);
-    const highS = noteToSemitone(s.high_note);
-    if(lowS != null && lowS < stretchLowS) stretchLowS = lowS;
-    if(highS != null && highS > stretchHighS) stretchHighS = highS;
-  });
-  if(stretchLowS === lowest.semitone) stretchLowS -= 3;
-  if(stretchHighS === highest.semitone) stretchHighS += 3;
-
   return {
     comfortLow: lowest.note, comfortHigh: highest.note,
-    stretchLow: semitoneToNoteName(stretchLowS),
-    stretchHigh: semitoneToNoteName(stretchHighS),
     count
   };
 }
@@ -2195,13 +2180,11 @@ function renderRangeModeUI(mode){
 
   const lowEl = document.getElementById("rComfortLow");
   const highEl = document.getElementById("rComfortHigh");
-  const stretchLowEl = document.getElementById("rStretchLow");
-  const stretchHighEl = document.getElementById("rStretchHigh");
   const summaryEl = document.getElementById("autoRangeSummary");
   const saveBtn = document.getElementById("saveRangeBtn");
 
   if(mode === "auto"){
-    [lowEl, highEl, stretchLowEl, stretchHighEl].forEach(el => el.disabled = true);
+    [lowEl, highEl].forEach(el => el.disabled = true);
     saveBtn.style.display = "none";
     summaryEl.style.display = "block";
 
@@ -2209,19 +2192,16 @@ function renderRangeModeUI(mode){
     if(auto){
       lowEl.value = auto.comfortLow;
       highEl.value = auto.comfortHigh;
-      stretchLowEl.value = auto.stretchLow;
-      stretchHighEl.value = auto.stretchHigh;
       summaryEl.textContent = `Based on ${auto.count} Solid song${auto.count===1?"":"s"} with a known range.`;
     }else{
-      lowEl.value = ""; highEl.value = ""; stretchLowEl.value = ""; stretchHighEl.value = "";
+      lowEl.value = ""; highEl.value = "";
       summaryEl.textContent = "No Solid songs with a known range yet — mark some Solid, or switch to Manual.";
     }
   }else{
-    [lowEl, highEl, stretchLowEl, stretchHighEl].forEach(el => el.disabled = false);
+    [lowEl, highEl].forEach(el => el.disabled = false);
     saveBtn.style.display = "block";
     summaryEl.style.display = "none";
-    lowEl.value = COMFORT_LOW; highEl.value = COMFORT_HIGH;
-    stretchLowEl.value = STRETCH_LOW; stretchHighEl.value = STRETCH_HIGH;
+    lowEl.value = COMFORT_LOW || ""; highEl.value = COMFORT_HIGH || "";
   }
 }
 
@@ -2323,12 +2303,11 @@ document.getElementById("rangeModeAutoBtn").onclick = async () => {
   const ok = await patchProfile({
     range_mode: "auto",
     ...(auto ? {
-      comfort_low: auto.comfortLow, comfort_high: auto.comfortHigh,
-      stretch_low: auto.stretchLow, stretch_high: auto.stretchHigh
+      comfort_low: auto.comfortLow, comfort_high: auto.comfortHigh
     } : {})
   });
   if(ok && auto){
-    applyRange(auto.comfortLow, auto.comfortHigh, auto.stretchLow, auto.stretchHigh);
+    applyRange(auto.comfortLow, auto.comfortHigh);
     recomputeFitScores();
   }
   showToast(ok ? "Switched to auto range" : "Saved locally — couldn't reach the server");
@@ -2343,12 +2322,10 @@ document.getElementById("rangeModeManualBtn").onclick = async () => {
   if(manualComfortLow && manualComfortHigh){
     patch.comfort_low = manualComfortLow;
     patch.comfort_high = manualComfortHigh;
-    patch.stretch_low = manualStretchLow || manualComfortLow;
-    patch.stretch_high = manualStretchHigh || manualComfortHigh;
     // Apply immediately (before the network round-trip) so the Settings
     // fields and range bars reflect the restored range right away, not
     // whatever auto last computed.
-    applyRange(patch.comfort_low, patch.comfort_high, patch.stretch_low, patch.stretch_high);
+    applyRange(patch.comfort_low, patch.comfort_high);
     recomputeFitScores();
   }
   renderRangeModeUI("manual");
@@ -2362,31 +2339,22 @@ document.getElementById("rangeModeManualBtn").onclick = async () => {
 document.getElementById("saveRangeBtn").onclick = async () => {
   const newComfortLow = document.getElementById("rComfortLow").value.trim();
   const newComfortHigh = document.getElementById("rComfortHigh").value.trim();
-  const newStretchLow = document.getElementById("rStretchLow").value.trim();
-  const newStretchHigh = document.getElementById("rStretchHigh").value.trim();
 
   if(noteToSemitone(newComfortLow) == null || noteToSemitone(newComfortHigh) == null){
-    showToast("Comfort notes need to look like A2, C#4, etc.");
+    showToast("Notes need to look like A2, C#4, etc.");
     return;
   }
-  const useStretchLow = noteToSemitone(newStretchLow) != null ? newStretchLow : newComfortLow;
-  const useStretchHigh = noteToSemitone(newStretchHigh) != null ? newStretchHigh : newComfortHigh;
 
   const ok = await patchProfile({
     comfort_low: newComfortLow,
     comfort_high: newComfortHigh,
-    stretch_low: useStretchLow,
-    stretch_high: useStretchHigh,
     range_mode: "manual",
     manual_comfort_low: newComfortLow,
-    manual_comfort_high: newComfortHigh,
-    manual_stretch_low: useStretchLow,
-    manual_stretch_high: useStretchHigh
+    manual_comfort_high: newComfortHigh
   });
   if(ok){
     manualComfortLow = newComfortLow; manualComfortHigh = newComfortHigh;
-    manualStretchLow = useStretchLow; manualStretchHigh = useStretchHigh;
-    applyRange(newComfortLow, newComfortHigh, useStretchLow, useStretchHigh);
+    applyRange(newComfortLow, newComfortHigh);
     recomputeFitScores();
     showToast("Range saved");
   }else{
@@ -2601,11 +2569,10 @@ async function onSignedIn(session){
   if(currentRangeMode === "auto"){
     const auto = computeAutoRange();
     if(auto){
-      applyRange(auto.comfortLow, auto.comfortHigh, auto.stretchLow, auto.stretchHigh);
+      applyRange(auto.comfortLow, auto.comfortHigh);
       recomputeFitScores();
       patchProfile({
-        comfort_low: auto.comfortLow, comfort_high: auto.comfortHigh,
-        stretch_low: auto.stretchLow, stretch_high: auto.stretchHigh
+        comfort_low: auto.comfortLow, comfort_high: auto.comfortHigh
       });
     }
   }
@@ -2642,22 +2609,16 @@ async function loadProfileRange(userId){
 
     manualComfortLow = profile.manual_comfort_low || null;
     manualComfortHigh = profile.manual_comfort_high || null;
-    manualStretchLow = profile.manual_stretch_low || null;
-    manualStretchHigh = profile.manual_stretch_high || null;
 
     if(profile.comfort_low && profile.comfort_high){
-      applyRange(
-        profile.comfort_low,
-        profile.comfort_high,
-        profile.stretch_low || profile.comfort_low,
-        profile.stretch_high || profile.comfort_high
-      );
+      applyRange(profile.comfort_low, profile.comfort_high);
     }
     // If comfort_low/high are still null (brand new profile, or auto mode
-    // that hasn't computed anything yet), we keep the A2–B4/G2–D5
-    // fallback for now — auto mode gets recomputed properly in
-    // onSignedIn() once songs are loaded; manual mode just waits for the
-    // user to set something in Settings.
+    // that hasn't computed anything yet), COMFORT_LOW/HIGH stay null and
+    // the UI shows "not calculated yet" throughout — no fake default
+    // range. Auto mode gets a real chance to compute one in onSignedIn()
+    // once songs are loaded; manual mode just waits for the user to set
+    // something in Settings.
   }catch(e){
     console.error("Failed to load profile range, using defaults", e);
   }

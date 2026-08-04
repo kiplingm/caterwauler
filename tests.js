@@ -47,14 +47,11 @@ vm.createContext(sandbox);
 
 const setup = [
   extractLineContaining('let COMFORT_LOW'),           // also declares COMFORT_HIGH
-  extractLineContaining('let STRETCH_LOW'),            // also declares STRETCH_HIGH
   "var songs = [];",
   extractLineContaining('const NOTE_VALUES'),
   extractFunction("noteToSemitone"),
-  extractLineContaining('let comfortLowS'),
-  extractLineContaining('let comfortHighS'),
-  extractLineContaining('let stretchLowS'),
-  extractLineContaining('let stretchHighS'),
+  "var comfortLowS = null;",
+  "var comfortHighS = null;",
   extractFunction("fitLabel"),
   extractFunction("fitScore"),
   extractLineContaining('const NOTE_NAMES'),
@@ -86,17 +83,31 @@ eq(sandbox.noteToSemitone(""), null, "empty string is invalid");
 eq(sandbox.noteToSemitone("H4"), null, "invalid note letter returns null");
 eq(sandbox.noteToSemitone(null), null, "null input returns null");
 
-// --- fitLabel (against Kipling's actual comfort A2-B4 / stretch G2-D5) ---
-eq(sandbox.fitLabel(null, null).cls, "fit-unknown", "no range data = unknown");
-eq(sandbox.fitLabel(sandbox.noteToSemitone("A2"), sandbox.noteToSemitone("B4")).cls, "fit-easy", "exact comfort bounds = easy fit");
-eq(sandbox.fitLabel(sandbox.noteToSemitone("G2"), sandbox.noteToSemitone("D5")).cls, "fit-stretch", "exact stretch bounds = stretch");
-eq(sandbox.fitLabel(sandbox.noteToSemitone("F2"), sandbox.noteToSemitone("D5")).cls, "fit-out", "below stretch floor = out of range");
-eq(sandbox.fitLabel(sandbox.noteToSemitone("G2"), sandbox.noteToSemitone("Eb5")).cls, "fit-out", "above stretch ceiling = out of range");
+// --- fitLabel: no comfort range set at all (the new-user default) ---
+eq(sandbox.fitLabel(sandbox.noteToSemitone("A2"), sandbox.noteToSemitone("B4")).cls, "fit-unknown", "no comfort range set yet = unknown, even with known song notes");
+eq(sandbox.fitLabel(sandbox.noteToSemitone("A2"), sandbox.noteToSemitone("B4")).text, "○ YOUR RANGE NOT SET", "distinguishes 'your range not set' from 'song range not set'");
+
+// --- fitLabel / fitScore against a set test comfort range (A2-B4) ---
+sandbox.comfortLowS = sandbox.noteToSemitone("A2");
+sandbox.comfortHighS = sandbox.noteToSemitone("B4");
+eq(sandbox.fitLabel(null, null).cls, "fit-unknown", "no song range data = unknown");
+eq(sandbox.fitLabel(null, null).text, "○ RANGE NOT SET", "song-specific unknown uses the other message");
+eq(sandbox.fitLabel(sandbox.noteToSemitone("A2"), sandbox.noteToSemitone("B4")).cls, "fit-easy", "exact comfort bounds = in range");
+eq(sandbox.fitLabel(sandbox.noteToSemitone("C3"), sandbox.noteToSemitone("A4")).cls, "fit-easy", "comfortably inside bounds = in range");
+eq(sandbox.fitLabel(sandbox.noteToSemitone("G2"), sandbox.noteToSemitone("D5")).cls, "fit-out", "outside comfort bounds = out of range (no more stretch tier)");
+eq(sandbox.fitLabel(sandbox.noteToSemitone("F2"), sandbox.noteToSemitone("D5")).cls, "fit-out", "below comfort floor = out of range");
+eq(sandbox.fitLabel(sandbox.noteToSemitone("G2"), sandbox.noteToSemitone("Eb5")).cls, "fit-out", "above comfort ceiling = out of range");
 
 // --- fitScore ---
-eq(sandbox.fitScore(null, null), Infinity, "unknown range scores worst (Infinity)");
+eq(sandbox.fitScore(null, null), Infinity, "unknown song range scores worst (Infinity)");
 eq(sandbox.fitScore("A2", "B4"), 0, "dead-center comfort fit scores 0");
 eq(sandbox.fitScore("F2", "B4") > 0, true, "song extending below comfort floor scores above 0");
+{
+  sandbox.comfortLowS = null; sandbox.comfortHighS = null;
+  eq(sandbox.fitScore("A2", "B4"), Infinity, "no comfort range set yet scores worst too, regardless of song data");
+  sandbox.comfortLowS = sandbox.noteToSemitone("A2");
+  sandbox.comfortHighS = sandbox.noteToSemitone("B4");
+}
 
 // --- semitoneToNoteName round-trips noteToSemitone ---
 ["A2","C3","F#4","Bb2","D5"].forEach(note=>{
@@ -105,8 +116,7 @@ eq(sandbox.fitScore("F2", "B4") > 0, true, "song extending below comfort floor s
   eq(sandbox.noteToSemitone(name), s, `round-trip semitone<->name for ${note}`);
 });
 
-// --- suggestTransposition ---
-// comfortSpan (B4-A2) = 26 semitones, stretchSpan (D5-G2) = 31 semitones.
+// --- suggestTransposition (comfortSpan for A2-B4 = 26 semitones) ---
 eq(sandbox.suggestTransposition(null, null), null, "no data = no suggestion");
 {
   // Span of 10 semitones (well under comfortSpan 26) fits the comfort zone.
@@ -114,14 +124,14 @@ eq(sandbox.suggestTransposition(null, null), null, "no data = no suggestion");
   eq(s.zone, "comfort", "narrow song suggests comfort zone");
 }
 {
-  // Span of 27 semitones (over comfortSpan 26, under stretchSpan 31) only fits stretch.
-  const s = sandbox.suggestTransposition(sandbox.noteToSemitone("C2"), sandbox.noteToSemitone("Eb4"));
-  eq(s.zone, "stretch", "wide-but-stretch-sized song suggests stretch zone");
+  // Span of 48 semitones (wider than comfortSpan 26) has no single-key fix now that there's no stretch fallback tier.
+  const s = sandbox.suggestTransposition(sandbox.noteToSemitone("C1"), sandbox.noteToSemitone("C5"));
+  eq(s.zone, "none", "song spanning more than comfort range has no single-key fix");
 }
 {
-  // Span of 48 semitones (wider than even stretchSpan 31) has no single-key fix.
-  const s = sandbox.suggestTransposition(sandbox.noteToSemitone("C1"), sandbox.noteToSemitone("C5"));
-  eq(s.zone, "none", "song spanning more than full stretch range has no single-key fix");
+  // Span of 27 semitones (just over comfortSpan 26) — previously fit a stretch tier, now has no fix either.
+  const s = sandbox.suggestTransposition(sandbox.noteToSemitone("C2"), sandbox.noteToSemitone("Eb4"));
+  eq(s.zone, "none", "song wider than comfort range has no single-key fix, even if it would've fit the old stretch tier");
 }
 
 // --- transpositionMessage ---
@@ -145,7 +155,6 @@ eq(sandbox.normalizeForMatch(null), "", "null is handled without throwing");
 sandbox.songs = [];
 eq(sandbox.computeAutoRange(), null, "no songs at all = no auto range");
 {
-  // No Learning/Maybe evidence at all: falls back to the 3-semitone pad heuristic.
   sandbox.songs = [
     {status:"Solid", low_note:"G2", high_note:"D4"},
     {status:"Solid", low_note:"A2", high_note:"D5"},
@@ -153,42 +162,28 @@ eq(sandbox.computeAutoRange(), null, "no songs at all = no auto range");
   const r = sandbox.computeAutoRange();
   eq(r.comfortLow, "G2", "comfort low = min across Solid songs");
   eq(r.comfortHigh, "D5", "comfort high = max across Solid songs");
-  eq(r.stretchLow, "E2", "no Learning/Maybe evidence below comfort -> falls back to 3-semitone pad");
-  eq(r.stretchHigh, "F5", "no Learning/Maybe evidence above comfort -> falls back to 3-semitone pad");
+  eq(r.count, 2, "count reflects Solid songs with known range");
 }
 {
-  // A Learning song that reaches higher than any Solid song should pull
-  // the stretch ceiling up to match real evidence, not the flat pad.
+  // Solid songs missing range data don't count and don't move the numbers.
   sandbox.songs = [
     {status:"Solid", low_note:"G2", high_note:"D4"},
-    {status:"Solid", low_note:"A2", high_note:"D5"},
-    {status:"Learning", low_note:"B3", high_note:"F5"},
+    {status:"Solid", low_note:null, high_note:null},
   ];
   const r = sandbox.computeAutoRange();
-  eq(r.stretchHigh, "F5", "Learning song's high note becomes the evidence-based stretch ceiling");
-  eq(r.stretchLow, "E2", "low side still falls back to pad since no Learning/Maybe evidence there");
+  eq(r.count, 1, "Solid song without range data doesn't count");
 }
 {
-  // A Maybe song reaching lower than comfort should set the stretch floor,
-  // and only that side — the high side still falls back to the pad.
+  // Non-Solid statuses never factor into the auto range at all now that
+  // there's no stretch zone for them to inform.
   sandbox.songs = [
     {status:"Solid", low_note:"G2", high_note:"D4"},
-    {status:"Maybe", low_note:"D2", high_note:"C4"},
+    {status:"Learning", low_note:"B1", high_note:"G5"},
+    {status:"Maybe", low_note:"C1", high_note:"C6"},
   ];
   const r = sandbox.computeAutoRange();
-  eq(r.stretchLow, "D2", "Maybe song's low note becomes the evidence-based stretch floor");
-  eq(r.stretchHigh, "F4", "high side still falls back to 3-semitone pad past comfort");
-}
-{
-  // Learning/Maybe notes that fall *inside* comfort shouldn't narrow
-  // stretch below the fallback pad.
-  sandbox.songs = [
-    {status:"Solid", low_note:"G2", high_note:"D4"},
-    {status:"Learning", low_note:"A2", high_note:"C4"}, // entirely inside comfort
-  ];
-  const r = sandbox.computeAutoRange();
-  eq(r.stretchLow, "E2", "in-bounds Learning song doesn't override the fallback pad");
-  eq(r.stretchHigh, "F4", "in-bounds Learning song doesn't override the fallback pad");
+  eq(r.comfortLow, "G2", "Learning/Maybe songs don't widen the range");
+  eq(r.comfortHigh, "D4", "Learning/Maybe songs don't widen the range");
 }
 
 // --- pickSingNowSongs ---

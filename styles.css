@@ -227,6 +227,7 @@
     border:1px solid var(--line); overflow:hidden;
   }
   .range-overlay{position:absolute; inset:0; pointer-events:none;}
+  .range-track-unset{background:repeating-linear-gradient(45deg, #14171b, #14171b 6px, #0d0f12 6px, #0d0f12 12px);}
   .range-bound{position:absolute; top:2px; bottom:2px; width:1px; background:var(--cream); opacity:0.3; z-index:2;}
   .range-song-line{
     position:absolute; top:50%; height:3px; margin-top:-1.5px; border-radius:1.5px;
@@ -234,7 +235,7 @@
   }
   .range-labels{display:flex; justify-content:space-between; font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:var(--cream-dim); margin-top:5px;}
   .range-fit{font-family:'IBM Plex Mono',monospace; font-size:10px; margin-top:4px;}
-  .fit-easy{color:var(--green);} .fit-stretch{color:var(--gold);} .fit-out{color:var(--red);} .fit-unknown{color:var(--cream-dim);}
+  .fit-easy{color:var(--green);} .fit-out{color:var(--red);} .fit-unknown{color:var(--cream-dim);}
 
   .card-meta{display:flex; gap:14px; margin-top:10px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cream-dim);}
   .card-actions{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;}
