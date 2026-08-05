@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "28";
+const BUILD_VERSION = "29";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -373,7 +373,7 @@ function buildRangeOverlay(comfortLeft, comfortRight){
     ${rgba(c.red,0.32)} 100%)`;
 }
 
-function renderRangeStrip(low, high, rangeSource){
+function renderRangeStrip(low, high, rangeSource, keyNotes){
   const lowS = noteToSemitone(low), highS = noteToSemitone(high);
   const fit = fitLabel(lowS, highS);
 
@@ -382,6 +382,7 @@ function renderRangeStrip(low, high, rangeSource){
     : (lowS!==null && highS!==null && rangeSource === "verified")
     ? `<span class="range-source-tag range-source-verified" title="Checked against a specific vocal reference">✓ verified</span>`
     : "";
+  const keyNotesHtml = keyNotes ? `<div class="range-key-notes">${escapeHtml(keyNotes)}</div>` : "";
 
   // No comfort range set yet — skip the color-coded track entirely rather
   // than drawing a misleading one against a range nobody chose.
@@ -390,6 +391,7 @@ function renderRangeStrip(low, high, rangeSource){
       <div class="range-strip">
         <div class="range-track range-track-unset"></div>
         <div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${sourceTag}</div>
+        ${keyNotesHtml}
       </div>`;
   }
 
@@ -423,6 +425,7 @@ function renderRangeStrip(low, high, rangeSource){
         ${songLine}
       </div>
       <div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${sourceTag}${suggestionHtml}</div>
+      ${keyNotesHtml}
     </div>`;
 }
 
@@ -619,12 +622,11 @@ function renderSongbook(){
           <div class="status-pill status-${s.status}" data-id="${s.id}"><span class="status-icon">${STATUS_ICONS[s.status]||""}</span> ${s.status}</div>
         `}
       </div>
-      ${renderRangeStrip(s.low_note, s.high_note, s.range_source)}
+      ${renderRangeStrip(s.low_note, s.high_note, s.range_source, s.key_notes)}
       <div class="card-meta">
         <div class="card-meta-text">
           ${s.genre ? `<span>${escapeHtml(s.genre)}</span>` : ""}
           ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : ""}
-          ${s.key_notes ? `<span>${escapeHtml(s.key_notes)}</span>` : ""}
         </div>
         ${externalLinksHtml(s.title, s.artist)}
       </div>
