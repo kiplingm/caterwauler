@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "19";
+const BUILD_VERSION = "20";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -484,9 +484,14 @@ function renderSingNow(){
         <div class="card-meta">
           ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : `<span>Never logged</span>`}
         </div>
-        <a class="youtube-link" href="${youtubeSearchUrl(s.title, s.artist)}" target="_blank" rel="noopener">
-          ▶ YouTube
-        </a>
+        <div class="external-links">
+          <a class="spotify-link" href="https://open.spotify.com/search/${encodeURIComponent(s.title + ' ' + s.artist)}" target="_blank" rel="noopener">
+            ♪ Spotify
+          </a>
+          <a class="youtube-link" href="${youtubeSearchUrl(s.title, s.artist)}" target="_blank" rel="noopener">
+            ▶ YouTube
+          </a>
+        </div>
         <div class="card-actions">
           <button class="logBtn primary sing-it-btn" data-id="${s.id}">Sing it →</button>
         </div>
