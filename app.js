@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "27";
+const BUILD_VERSION = "28";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -629,9 +629,9 @@ function renderSongbook(){
         ${externalLinksHtml(s.title, s.artist)}
       </div>
       <div class="card-actions">
-        <button class="logBtn icon-action-btn primary" data-id="${s.id}" title="Performances" aria-label="Performances">🕘</button>
-        <button class="setlistAddBtn icon-action-btn" data-id="${s.id}" title="Add to setlist" aria-label="Add to setlist">➕</button>
-        <button class="editBtn icon-action-btn" data-id="${s.id}" title="Edit" aria-label="Edit">✏️</button>
+        <button class="logBtn primary" data-id="${s.id}">Performances</button>
+        <button class="setlistAddBtn" data-id="${s.id}">+ Setlist</button>
+        <button class="editBtn" data-id="${s.id}">Edit</button>
       </div>
     </div>
   `).join("");
