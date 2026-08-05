@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>Setlist Sherpa</title>
-<link rel="stylesheet" href="styles.css?v=16">
+<link rel="stylesheet" href="styles.css?v=17">
 </head>
 <body>
 
@@ -55,10 +55,6 @@
       <h1>SETLIST SHERPA</h1>
       <div class="marquee-actions">
         <div class="icon-btn-wrap">
-          <button class="gear-btn" id="setlistsBtn" aria-label="Setlists">🎤</button>
-          <span class="icon-btn-label">Setlists</span>
-        </div>
-        <div class="icon-btn-wrap">
           <button class="gear-btn" id="recBtn" aria-label="Recommendations">✨</button>
           <span class="icon-btn-label">Recs</span>
         </div>
@@ -82,6 +78,7 @@
   <div class="view-switcher" id="viewSwitcher">
     <button class="view-tab active" id="viewSingNowBtn" data-view="singNow">🎤 Sing Now</button>
     <button class="view-tab" id="viewSongbookBtn" data-view="songbook">📋 Songbook</button>
+    <button class="view-tab" id="viewSetlistsBtn" data-view="setlists">📝 Setlists</button>
   </div>
 
   <div class="controls" id="controls">
@@ -110,6 +107,9 @@
   <div class="skeleton-card"></div>
   <div class="skeleton-card"></div>
   <div class="skeleton-card"></div>
+</div>
+<div class="list" id="setlistsView" style="display:none;">
+  <div id="setlistsList"></div>
 </div>
 
 <button class="fab" id="fabAdd">+</button>
@@ -142,13 +142,7 @@
   <div class="field-row">
     <div class="field">
       <label>STATUS</label>
-      <select id="fStatus">
-        <option>Solid</option>
-        <option>Learning</option>
-        <option selected>Maybe</option>
-        <option>Suggested</option>
-        <option>Retired</option>
-      </select>
+      <select id="fStatus"></select>
     </div>
     <div class="field">
       <label>GENRE</label>
@@ -222,7 +216,7 @@
 <div class="sheet-backdrop" id="recBackdrop"></div>
 <div class="sheet" id="recSheet">
   <h2>Recommendations</h2>
-  <div class="artist" style="margin-bottom:12px;">Songs by artists you've marked Solid, not already in your songbook</div>
+  <div class="artist" style="margin-bottom:12px;">More from artists you're Solid on, other artists sharing a genre tag, and — if configured — similar artists via Last.fm</div>
   <div id="recList"></div>
   <div class="sheet-actions">
     <button class="btn-cancel" id="btnRecClose" style="flex:1;">Close</button>
@@ -244,15 +238,6 @@
   </div>
 </div>
 
-<div class="sheet-backdrop" id="setlistsBackdrop"></div>
-<div class="sheet" id="setlistsSheet">
-  <h2>Setlists</h2>
-  <div id="setlistsList"></div>
-  <div class="sheet-actions">
-    <button class="btn-cancel" id="btnSetlistsClose" style="flex:1;">Close</button>
-    <button class="btn-save" id="btnNewSetlist" style="flex:1;">+ New setlist</button>
-  </div>
-</div>
 
 <div class="sheet-backdrop" id="setlistDetailBackdrop"></div>
 <div class="sheet" id="setlistDetailSheet">
@@ -492,6 +477,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=22"></script>
+<script src="app.js?v=23"></script>
 </body>
 </html>

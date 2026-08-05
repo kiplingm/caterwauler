@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "22";
+const BUILD_VERSION = "23";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -98,7 +98,7 @@ let sortMode = "fit";
 // for picking your next song live at karaoke, as opposed to the full
 // Songbook view (search/filter/sort over everything). Persisted so the
 // app reopens on whichever mode was last used.
-let currentView = localStorage.getItem("ss_view") === "songbook" ? "songbook" : "singNow";
+let currentView = ["songbook","setlists"].includes(localStorage.getItem("ss_view")) ? localStorage.getItem("ss_view") : "singNow";
 // Ids excluded from the current Sing Now stack — populated by "Give me
 // different picks" so reshuffling doesn't just show the same songs again
 // until every eligible song has had a turn, then it resets.
@@ -113,6 +113,14 @@ let catalogFallbackDebounce = null;
 let editingStatusId = null;
 const STATUS_OPTIONS = ["Solid","Learning","Maybe","Suggested","Retired","Test"];
 const STATUS_ICONS = {Solid:"✓", Learning:"◐", Maybe:"?", Suggested:"★", Retired:"✕", Test:"🧪"};
+
+// The Add/Edit song form's status field is the one place STATUS_OPTIONS
+// isn't consumed generically at render time (the filter chips and the
+// per-song status editor both are) — populate it here instead of hardcoding
+// the option list a second time in index.html, so a future status addition
+// can't silently miss this form the way "Test" originally did.
+document.getElementById("fStatus").innerHTML = STATUS_OPTIONS
+  .map(opt => `<option ${opt==="Maybe"?"selected":""}>${opt}</option>`).join("");
 
 document.getElementById("sortSelect").addEventListener("change", e=>{
   sortMode = e.target.value;
@@ -423,6 +431,8 @@ function renderRangeStrip(low, high, rangeSource){
 function render(){
   if(currentView === "singNow"){
     renderSingNow();
+  }else if(currentView === "setlists"){
+    fetchSetlists();
   }else{
     renderSongbook();
   }
@@ -431,10 +441,19 @@ function render(){
 function syncViewVisibility(view){
   document.getElementById("viewSingNowBtn").classList.toggle("active", view === "singNow");
   document.getElementById("viewSongbookBtn").classList.toggle("active", view === "songbook");
+  document.getElementById("viewSetlistsBtn").classList.toggle("active", view === "setlists");
   document.getElementById("singNowList").style.display = view === "singNow" ? "flex" : "none";
   document.getElementById("list").style.display = view === "songbook" ? "flex" : "none";
+  document.getElementById("setlistsView").style.display = view === "setlists" ? "flex" : "none";
   document.getElementById("controls").style.display = view === "songbook" ? "flex" : "none";
   countRow.style.display = view === "songbook" ? "block" : "none";
+  // The FAB's job changes with the view: add a song on Songbook, start a
+  // new setlist on Setlists, and it has no clear job on Sing Now (that
+  // view's own "Give me different picks" button is the primary action
+  // there), so it's hidden rather than doing something off-topic.
+  document.getElementById("fabAdd").style.display = view === "singNow" ? "none" : "flex";
+  document.getElementById("fabAdd").textContent = view === "setlists" ? "📝" : "+";
+  document.getElementById("fabAdd").setAttribute("aria-label", view === "setlists" ? "New setlist" : "Add song");
 }
 
 function setView(view){
@@ -446,6 +465,7 @@ function setView(view){
 
 document.getElementById("viewSingNowBtn").onclick = () => setView("singNow");
 document.getElementById("viewSongbookBtn").onclick = () => setView("songbook");
+document.getElementById("viewSetlistsBtn").onclick = () => setView("setlists");
 
 function renderSingNow(){
   const listEl = document.getElementById("singNowList");
@@ -454,8 +474,8 @@ function renderSingNow(){
   if(solidCount === 0){
     listEl.innerHTML = `
       <div class="empty">
-        No Solid songs yet — Sing Now picks from songs marked Solid.<br>
-        Mark a few in your Songbook and they'll show up here.
+        Mark a few songs Solid to get started — Sing Now picks from those,
+        favoring ones you haven't sung in a while.
       </div>`;
     return;
   }
@@ -624,7 +644,6 @@ function renderSongbook(){
         <button class="logBtn primary" data-id="${s.id}">Performances</button>
         <button class="setlistAddBtn" data-id="${s.id}">+ Setlist</button>
         <button class="editBtn" data-id="${s.id}">Edit</button>
-        <button class="delBtn danger" data-id="${s.id}">Delete</button>
       </div>
     </div>
   `).join("");
@@ -640,7 +659,6 @@ function renderSongbook(){
   document.querySelectorAll(".logBtn").forEach(b=>b.onclick = ()=>openLog(b.dataset.id));
   document.querySelectorAll(".setlistAddBtn").forEach(b=>b.onclick = ()=>openAddToSetlist(b.dataset.id));
   document.querySelectorAll(".editBtn").forEach(b=>b.onclick = ()=>openEdit(b.dataset.id));
-  document.querySelectorAll(".delBtn").forEach(b=>b.onclick = ()=>deleteSong(b.dataset.id));
 }
 
 async function updateStatus(id, newStatus){
@@ -742,6 +760,10 @@ function openSheet(){ backdrop.classList.add("open"); sheet.classList.add("open"
 function closeSheet(){ backdrop.classList.remove("open"); sheet.classList.remove("open"); }
 
 document.getElementById("fabAdd").onclick = ()=>{
+  if(currentView === "setlists"){
+    openSetlistDetail(null);
+    return;
+  }
   document.getElementById("sheetTitle").textContent = "Add song";
   document.getElementById("editId").value = "";
   ["fTitle","fArtist","fLow","fHigh","fGenre","fKeyNotes"].forEach(id=>document.getElementById(id).value="");
@@ -758,9 +780,11 @@ backdrop.onclick = closeSheet;
 document.getElementById("btnDeleteSong").onclick = async () => {
   const id = document.getElementById("editId").value;
   if(!id) return;
-  if(!confirm("Delete this song?")) return;
-  closeSheet();
-  await deleteSong(id, {skipConfirm:true});
+  // deleteSong() shows its own confirm, which mentions logged performance
+  // count when relevant — more informative than a plain "Delete this
+  // song?" here, so let it handle confirmation rather than asking twice.
+  const deleted = await deleteSong(id);
+  if(deleted !== false) closeSheet();
 };
 
 function openEdit(id){
@@ -833,7 +857,7 @@ async function deleteSong(id, opts={}){
     const warning = perfCount > 0
       ? `Delete this song? This also permanently deletes its ${perfCount} logged performance${perfCount===1?"":"s"} (venue, dates, notes).`
       : "Delete this song?";
-    if(!confirm(warning)) return;
+    if(!confirm(warning)) return false;
   }
   try{
     const res = await fetch(`${SUPABASE_URL}/rest/v1/songs?id=eq.${id}`, {method:"DELETE", headers: HEADERS});
@@ -842,8 +866,10 @@ async function deleteSong(id, opts={}){
     const cardEl = document.querySelector(`.card[data-id="${id}"]`);
     if(cardEl) await animateRemove(cardEl);
     fetchSongs();
+    return true;
   }catch(err){
     showToast("Error: " + err.message);
+    return false;
   }
 }
 
@@ -1509,7 +1535,7 @@ async function openRecommendations(){
 
   const solidSongs = songs.filter(s => s.status === "Solid");
   if(solidSongs.length === 0){
-    listEl.innerHTML = `<div class="rec-empty">Mark a few songs "Solid" first — recommendations are built from what's already working for you.</div>`;
+    listEl.innerHTML = `<div class="rec-empty">Mark a few songs Solid to get started — recommendations are built from what's already working for you.</div>`;
     return;
   }
 
@@ -1665,8 +1691,6 @@ async function dismissRecommendation(rec, itemEl){
 }
 
 // --- Setlists: named, ordered song lists optionally tied to a gig date/venue ---
-const setlistsSheet = document.getElementById("setlistsSheet");
-const setlistsBackdrop = document.getElementById("setlistsBackdrop");
 const setlistDetailSheet = document.getElementById("setlistDetailSheet");
 const setlistDetailBackdrop = document.getElementById("setlistDetailBackdrop");
 
@@ -1675,20 +1699,8 @@ let currentSetlistId = null;
 let currentSetlistSongs = []; // [{id: setlist_songs row id, song_id, title, artist}], in position order
 let slAddSearchTerm = "";
 
-document.getElementById("setlistsBtn").onclick = openSetlists;
-document.getElementById("btnSetlistsClose").onclick = closeSetlists;
-document.getElementById("btnNewSetlist").onclick = () => openSetlistDetail(null);
 document.getElementById("btnSetlistDetailCancel").onclick = closeSetlistDetail;
 
-async function openSetlists(){
-  setlistsBackdrop.classList.add("open");
-  setlistsSheet.classList.add("open");
-  await fetchSetlists();
-}
-function closeSetlists(){
-  setlistsBackdrop.classList.remove("open");
-  setlistsSheet.classList.remove("open");
-}
 function closeSetlistDetail(){
   setlistDetailBackdrop.classList.remove("open");
   setlistDetailSheet.classList.remove("open");
@@ -2212,7 +2224,7 @@ function renderRangeModeUI(mode){
       summaryEl.textContent = `Based on ${auto.count} Solid song${auto.count===1?"":"s"} with a known range.`;
     }else{
       lowEl.value = ""; highEl.value = "";
-      summaryEl.textContent = "No Solid songs with a known range yet — mark some Solid, or switch to Manual.";
+      summaryEl.textContent = "Mark a few songs Solid with a known range to calculate this automatically, or switch to Manual.";
     }
   }else{
     [lowEl, highEl].forEach(el => el.disabled = false);
