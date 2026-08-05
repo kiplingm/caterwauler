@@ -138,11 +138,11 @@ eq(sandbox.suggestTransposition(null, null), null, "no data = no suggestion");
 eq(sandbox.transpositionMessage(null, null), "", "no data = empty message");
 {
   const msg = sandbox.transpositionMessage(sandbox.noteToSemitone("C1"), sandbox.noteToSemitone("C5"));
-  eq(msg.includes("no single key change"), true, "unfixable span says so in plain language");
+  eq(msg.includes("no key change"), true, "unfixable span says so in plain language");
 }
 {
   const msg = sandbox.transpositionMessage(sandbox.noteToSemitone("F2"), sandbox.noteToSemitone("D4"));
-  eq(msg.startsWith("Try shifting"), true, "fixable out-of-range song gets a concrete shift suggestion");
+  eq(msg.includes("→"), true, "fixable out-of-range song gets a concrete shift suggestion");
 }
 
 // --- normalizeForMatch ---

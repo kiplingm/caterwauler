@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "24";
+const BUILD_VERSION = "25";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -325,15 +325,15 @@ function transpositionMessage(lowS, highS){
   if(!suggestion) return "";
   const {shift, zone} = suggestion;
   if(zone === "none"){
-    return "Spans more than your range — no single key change fixes this one.";
+    return "Spans more than your range — no key change fixes this.";
   }
   const dir = shift > 0 ? "up" : shift < 0 ? "down" : null;
   if(!dir){
-    return "Already centered — this is as good as it gets in your range.";
+    return "Already centered in your range.";
   }
   const newLow = semitoneToNoteName(lowS + shift);
   const newHigh = semitoneToNoteName(highS + shift);
-  return `Try shifting ${dir} ${Math.abs(shift)} semitone${Math.abs(shift)===1?"":"s"} (${newLow}–${newHigh}) to fit your range.`;
+  return `${dir==="up"?"+":"−"}${Math.abs(shift)} semitone${Math.abs(shift)===1?"":"s"} → ${newLow}–${newHigh}`;
 }
 
 // Reads the active theme's brighter gradient-only colors as RGB triples,
@@ -389,7 +389,6 @@ function renderRangeStrip(low, high, rangeSource){
     return `
       <div class="range-strip">
         <div class="range-track range-track-unset"></div>
-        <div class="range-labels"><span>Set your range in Settings</span></div>
         <div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${sourceTag}</div>
       </div>`;
   }
@@ -423,7 +422,6 @@ function renderRangeStrip(low, high, rangeSource){
         <div class="range-bound" style="left:${comfortRight}%;"></div>
         ${songLine}
       </div>
-      <div class="range-labels"><span>${COMFORT_LOW}</span><span>${COMFORT_HIGH}</span></div>
       <div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${sourceTag}${suggestionHtml}</div>
     </div>`;
 }
