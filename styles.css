@@ -258,6 +258,10 @@
   }
   .card-actions button.primary{border-color:var(--teal); color:var(--teal);}
   .card-actions button.danger{border-color:var(--red); color:var(--red);}
+  .card-actions .icon-action-btn{
+    flex:1; height:36px; padding:0; font-size:16px; line-height:1;
+    display:flex; align-items:center; justify-content:center;
+  }
 
   .fab{
     position:fixed; right:20px; bottom:24px; width:56px; height:56px; border-radius:50%;
