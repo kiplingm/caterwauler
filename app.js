@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "20";
+const BUILD_VERSION = "21";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -111,8 +111,8 @@ let singNowExcludeIds = new Set();
 let catalogFallbackToken = 0;
 let catalogFallbackDebounce = null;
 let editingStatusId = null;
-const STATUS_OPTIONS = ["Solid","Learning","Maybe","Suggested","Retired"];
-const STATUS_ICONS = {Solid:"✓", Learning:"◐", Maybe:"?", Suggested:"★", Retired:"✕"};
+const STATUS_OPTIONS = ["Solid","Learning","Maybe","Suggested","Retired","Test"];
+const STATUS_ICONS = {Solid:"✓", Learning:"◐", Maybe:"?", Suggested:"★", Retired:"✕", Test:"🧪"};
 
 document.getElementById("sortSelect").addEventListener("change", e=>{
   sortMode = e.target.value;
@@ -122,7 +122,7 @@ document.getElementById("sortSelect").addEventListener("change", e=>{
 const listEl = document.getElementById("list");
 const countRow = document.getElementById("countRow");
 const chipsEl = document.getElementById("chips");
-const FILTERS = ["All","Solid","Learning","Maybe","Suggested","Retired"];
+const FILTERS = ["All","Solid","Learning","Maybe","Suggested","Retired","Test"];
 
 FILTERS.forEach(f=>{
   const c = document.createElement("button");
