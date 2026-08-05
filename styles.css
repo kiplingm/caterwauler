@@ -238,9 +238,10 @@
     position:absolute; top:50%; height:3px; margin-top:-1.5px; border-radius:1.5px;
     background:var(--teal); box-shadow:0 0 8px var(--teal), 0 0 16px var(--teal); z-index:3;
   }
-  .range-fit{font-family:'IBM Plex Mono',monospace; font-size:10px; margin-top:2px;}
-  .range-key-notes{font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--cream-dim);}
-  .range-below-row{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:6px;}
+  .range-fit{font-family:'IBM Plex Mono',monospace; font-size:10px;}
+  .range-key-notes{font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--cream-dim); min-height:1em;}
+  .range-info-row{display:flex; justify-content:space-between; align-items:stretch; gap:10px; margin-top:6px;}
+  .range-text-stack{display:flex; flex-direction:column; justify-content:space-between;}
   .fit-easy{color:var(--green);} .fit-out{color:var(--red);} .fit-unknown{color:var(--cream-dim);}
 
   .card-meta{display:flex; flex-wrap:wrap; gap:10px 14px; margin-top:10px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cream-dim);}

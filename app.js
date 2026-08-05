@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "31";
+const BUILD_VERSION = "32";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -382,25 +382,31 @@ function renderRangeStrip(low, high, rangeSource, keyNotes, title, artist){
     : (lowS!==null && highS!==null && rangeSource === "verified")
     ? `<span class="range-source-tag range-source-verified" title="Checked against a specific vocal reference">✓ verified</span>`
     : "";
-  // Key notes and the Spotify/YouTube links both live right under the
-  // range info now — key/capo notes because they're performance info
-  // grouped with the fit line, and the links because they're most useful
-  // right where you're already deciding whether/how to sing the song,
-  // not buried down in the catalog-metadata row.
-  const belowRangeRow = `
-    <div class="range-below-row">
-      <div class="range-key-notes">${keyNotes ? escapeHtml(keyNotes) : ""}</div>
-      ${(title && artist) ? externalLinksHtml(title, artist) : ""}
-    </div>`;
+  const iconLinksHtml = (title && artist) ? externalLinksHtml(title, artist) : "";
+
+  // Key notes and the fit line form a two-line text stack that sits next
+  // to the Spotify/YouTube icons — key notes top-aligned with the icons,
+  // the fit line bottom-aligned with them — instead of the fit line
+  // sitting as its own separate row underneath everything.
+  function buildInfoRow(fitLine){
+    return `
+      <div class="range-info-row">
+        <div class="range-text-stack">
+          <div class="range-key-notes">${keyNotes ? escapeHtml(keyNotes) : ""}</div>
+          ${fitLine}
+        </div>
+        ${iconLinksHtml}
+      </div>`;
+  }
 
   // No comfort range set yet — skip the color-coded track entirely rather
   // than drawing a misleading one against a range nobody chose.
   if(comfortLowS === null || comfortHighS === null){
+    const fitLine = `<div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${sourceTag}</div>`;
     return `
       <div class="range-strip">
         <div class="range-track range-track-unset"></div>
-        ${belowRangeRow}
-        <div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${sourceTag}</div>
+        ${buildInfoRow(fitLine)}
       </div>`;
   }
 
@@ -425,6 +431,7 @@ function renderRangeStrip(low, high, rangeSource, keyNotes, title, artist){
   const suggestionHtml = fit.cls === "fit-out"
     ? `<span class="transpose-suggestion">${transpositionMessage(lowS, highS)}</span>`
     : "";
+  const fitLine = `<div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${sourceTag}${suggestionHtml}</div>`;
   return `
     <div class="range-strip">
       <div class="range-track">
@@ -433,8 +440,7 @@ function renderRangeStrip(low, high, rangeSource, keyNotes, title, artist){
         <div class="range-bound" style="left:${comfortRight}%;"></div>
         ${songLine}
       </div>
-      ${belowRangeRow}
-      <div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${sourceTag}${suggestionHtml}</div>
+      ${buildInfoRow(fitLine)}
     </div>`;
 }
 
