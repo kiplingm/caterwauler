@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "29";
+const BUILD_VERSION = "30";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -373,7 +373,7 @@ function buildRangeOverlay(comfortLeft, comfortRight){
     ${rgba(c.red,0.32)} 100%)`;
 }
 
-function renderRangeStrip(low, high, rangeSource, keyNotes){
+function renderRangeStrip(low, high, rangeSource, keyNotes, title, artist){
   const lowS = noteToSemitone(low), highS = noteToSemitone(high);
   const fit = fitLabel(lowS, highS);
 
@@ -382,7 +382,16 @@ function renderRangeStrip(low, high, rangeSource, keyNotes){
     : (lowS!==null && highS!==null && rangeSource === "verified")
     ? `<span class="range-source-tag range-source-verified" title="Checked against a specific vocal reference">✓ verified</span>`
     : "";
-  const keyNotesHtml = keyNotes ? `<div class="range-key-notes">${escapeHtml(keyNotes)}</div>` : "";
+  // Key notes and the Spotify/YouTube links both live right under the
+  // range info now — key/capo notes because they're performance info
+  // grouped with the fit line, and the links because they're most useful
+  // right where you're already deciding whether/how to sing the song,
+  // not buried down in the catalog-metadata row.
+  const belowRangeRow = `
+    <div class="range-below-row">
+      <div class="range-key-notes">${keyNotes ? escapeHtml(keyNotes) : ""}</div>
+      ${(title && artist) ? externalLinksHtml(title, artist) : ""}
+    </div>`;
 
   // No comfort range set yet — skip the color-coded track entirely rather
   // than drawing a misleading one against a range nobody chose.
@@ -391,7 +400,7 @@ function renderRangeStrip(low, high, rangeSource, keyNotes){
       <div class="range-strip">
         <div class="range-track range-track-unset"></div>
         <div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${sourceTag}</div>
-        ${keyNotesHtml}
+        ${belowRangeRow}
       </div>`;
   }
 
@@ -425,7 +434,7 @@ function renderRangeStrip(low, high, rangeSource, keyNotes){
         ${songLine}
       </div>
       <div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${sourceTag}${suggestionHtml}</div>
-      ${keyNotesHtml}
+      ${belowRangeRow}
     </div>`;
 }
 
@@ -501,12 +510,9 @@ function renderSingNow(){
             <div class="artist">${escapeHtml(s.artist)}</div>
           </div>
         </div>
-        ${renderRangeStrip(s.low_note, s.high_note, s.range_source)}
+        ${renderRangeStrip(s.low_note, s.high_note, s.range_source, null, s.title, s.artist)}
         <div class="card-meta">
-          <div class="card-meta-text">
-            ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : `<span>Never logged</span>`}
-          </div>
-          ${externalLinksHtml(s.title, s.artist)}
+          ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : `<span>Never logged</span>`}
         </div>
         <div class="card-actions">
           <button class="logBtn primary sing-it-btn" data-id="${s.id}">Sing it →</button>
@@ -622,13 +628,10 @@ function renderSongbook(){
           <div class="status-pill status-${s.status}" data-id="${s.id}"><span class="status-icon">${STATUS_ICONS[s.status]||""}</span> ${s.status}</div>
         `}
       </div>
-      ${renderRangeStrip(s.low_note, s.high_note, s.range_source, s.key_notes)}
+      ${renderRangeStrip(s.low_note, s.high_note, s.range_source, s.key_notes, s.title, s.artist)}
       <div class="card-meta">
-        <div class="card-meta-text">
-          ${s.genre ? `<span>${escapeHtml(s.genre)}</span>` : ""}
-          ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : ""}
-        </div>
-        ${externalLinksHtml(s.title, s.artist)}
+        ${s.genre ? `<span>${escapeHtml(s.genre)}</span>` : ""}
+        ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : ""}
       </div>
       <div class="card-actions">
         <button class="logBtn primary" data-id="${s.id}">Performances</button>
