@@ -289,8 +289,22 @@
     <label>SIGNED IN AS</label>
     <div class="artist" id="accountEmail">—</div>
   </div>
+
+  <div class="settings-section-label">Invite</div>
   <div class="field">
-    <label>VOCAL RANGE</label>
+    <label>SHARE SETLIST SHERPA</label>
+    <div class="artist" style="margin-bottom:10px;">
+      Generates a link plus a short blurb explaining what the app is —
+      paste it into a text or email to invite someone.
+    </div>
+    <button class="check-missing-btn" id="genInviteBtn">Generate invite link</button>
+    <div id="inviteResult" style="display:none; margin-top:10px;">
+      <textarea id="inviteOutput" readonly rows="6" style="width:100%; font-family:'IBM Plex Mono',monospace; font-size:12px; padding:10px; border-radius:8px; background:var(--bg-raised); border:1px solid var(--line); color:var(--cream); resize:vertical;"></textarea>
+      <button class="ask-claude-copy-btn" id="inviteCopyBtn" style="margin-top:8px;">Copy</button>
+    </div>
+  </div>
+  <div class="settings-section-label">Vocal range</div>
+  <div class="field">
     <div class="range-mode-toggle">
       <button type="button" class="range-mode-btn" id="rangeModeAutoBtn">Auto — from Solid songs</button>
       <button type="button" class="range-mode-btn" id="rangeModeManualBtn">Manual</button>
@@ -477,6 +491,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=26"></script>
+<script src="app.js?v=27"></script>
 </body>
 </html>

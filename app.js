@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "26";
+const BUILD_VERSION = "27";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -2238,10 +2238,34 @@ function renderRangeModeUI(mode){
 document.getElementById("settingsBtn").onclick = () => {
   renderThemeGrid();
   document.getElementById("missingResults").innerHTML = "";
+  document.getElementById("inviteResult").style.display = "none";
   renderRangeModeUI(currentRangeMode);
   settingsBackdrop.classList.add("open");
   settingsSheet.classList.add("open");
 };
+
+document.getElementById("genInviteBtn").onclick = async () => {
+  // Strip any query string (e.g. a stray ?u=... from an admin test-account
+  // shortcut link) so a real invite always points at the plain app root,
+  // never accidentally at someone else's per-person shortcut.
+  const appUrl = window.location.origin + window.location.pathname;
+  const inviteText = `Hey! I've been using Setlist Sherpa to manage my karaoke songbook — it tracks which songs I actually know, checks them against my real vocal range, and always has a good pick ready. Thought you might like it too.\n\n${appUrl}\n\nJust enter your email — it creates your own private songbook automatically, no password needed.`;
+
+  const outputEl = document.getElementById("inviteOutput");
+  const resultEl = document.getElementById("inviteResult");
+  outputEl.value = inviteText;
+  resultEl.style.display = "block";
+
+  let copied = false;
+  try{ await navigator.clipboard.writeText(inviteText); copied = true; }catch(e){ /* fall back to manual copy below */ }
+  showToast(copied ? "Invite copied" : "Generated — tap Copy below");
+};
+document.getElementById("inviteCopyBtn").onclick = () => {
+  const outputEl = document.getElementById("inviteOutput");
+  outputEl.select();
+  try{ document.execCommand("copy"); showToast("Copied"); }catch(e){ showToast("Select the text above and copy it manually"); }
+};
+
 function closeSettings(){
   settingsBackdrop.classList.remove("open");
   settingsSheet.classList.remove("open");
