@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "30";
+const BUILD_VERSION = "31";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -399,8 +399,8 @@ function renderRangeStrip(low, high, rangeSource, keyNotes, title, artist){
     return `
       <div class="range-strip">
         <div class="range-track range-track-unset"></div>
-        <div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${sourceTag}</div>
         ${belowRangeRow}
+        <div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${sourceTag}</div>
       </div>`;
   }
 
@@ -433,8 +433,8 @@ function renderRangeStrip(low, high, rangeSource, keyNotes, title, artist){
         <div class="range-bound" style="left:${comfortRight}%;"></div>
         ${songLine}
       </div>
-      <div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${sourceTag}${suggestionHtml}</div>
       ${belowRangeRow}
+      <div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${sourceTag}${suggestionHtml}</div>
     </div>`;
 }
 
