@@ -10,9 +10,9 @@
     --cream-dim: #b6a99a;
     --red: #e8615a;
     --green: #6fbf73;
-    /* Only used by the Test status pill — deliberately not redefined per
-       theme below, since it inherits this base value fine either way and
-       Test is a dev/QA-only status, not part of the themed palette. */
+    /* Used by the Test status pill — deliberately not redefined per theme
+       below, since inheriting this base value works fine across all of
+       them without needing a per-theme variant. */
     --purple: #b48cff;
     /* Brighter, more saturated variants used only by the range-bar gradient —
        kept separate from --green/--gold/--red so status pills and other UI
@@ -210,7 +210,7 @@
   .status-Maybe{background:rgba(232,183,78,0.15); color:var(--gold);}
   .status-Retired{background:rgba(232,97,90,0.15); color:var(--red);}
   .status-Suggested{background:rgba(182,169,154,0.18); color:var(--cream-dim);}
-  .status-Test{background:rgba(180,140,255,0.15); color:var(--purple); border:1px dashed var(--purple);}
+  .status-Test{background:rgba(180,140,255,0.15); color:var(--purple);}
   .status-pill{cursor:pointer;}
   .status-edit-select{
     font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:0.4px;
