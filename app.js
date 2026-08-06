@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "32";
+const BUILD_VERSION = "33";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -92,6 +92,11 @@ function applyRange(comfortLow, comfortHigh){
 
 let songs = [];
 let activeFilter = "All";
+// Songbook cards are collapsed (title/artist/status only) by default and
+// expand on tap to reveal range/meta/actions. Session-only (not persisted
+// anywhere) — resets to all-collapsed on next load, same as search/sort/
+// filter state.
+let expandedCardIds = new Set();
 let searchTerm = "";
 let sortMode = "fit";
 // Sing Now is the landing view: a short, ranked stack of Solid songs meant
@@ -620,37 +625,51 @@ function renderSongbook(){
   }
 
   listEl.innerHTML = filtered.map(s => `
-    <div class="card" data-id="${s.id}">
-      <div class="card-top">
+    <div class="card ${expandedCardIds.has(s.id) ? "expanded" : ""}" data-id="${s.id}">
+      <div class="card-top card-head" data-id="${s.id}">
         <div>
           <div class="title">${escapeHtml(s.title)}${s.in_karafun ? `<span class="karafun-badge" title="In the KaraFun catalog">K</span>` : ""}</div>
           <div class="artist">${escapeHtml(s.artist)}</div>
         </div>
-        ${editingStatusId === s.id ? `
-          <select class="status-edit-select" data-id="${s.id}">
-            ${STATUS_OPTIONS.map(opt => `<option value="${opt}" ${opt===s.status?"selected":""}>${opt}</option>`).join("")}
-          </select>
-        ` : `
-          <div class="status-pill status-${s.status}" data-id="${s.id}"><span class="status-icon">${STATUS_ICONS[s.status]||""}</span> ${s.status}</div>
-        `}
+        <div class="card-head-right">
+          ${editingStatusId === s.id ? `
+            <select class="status-edit-select" data-id="${s.id}">
+              ${STATUS_OPTIONS.map(opt => `<option value="${opt}" ${opt===s.status?"selected":""}>${opt}</option>`).join("")}
+            </select>
+          ` : `
+            <div class="status-pill status-${s.status}" data-id="${s.id}"><span class="status-icon">${STATUS_ICONS[s.status]||""}</span> ${s.status}</div>
+          `}
+          <span class="card-chevron">${expandedCardIds.has(s.id) ? "▲" : "▼"}</span>
+        </div>
       </div>
-      ${renderRangeStrip(s.low_note, s.high_note, s.range_source, s.key_notes, s.title, s.artist)}
-      <div class="card-meta">
-        ${s.genre ? `<span>${escapeHtml(s.genre)}</span>` : ""}
-        ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : ""}
-      </div>
-      <div class="card-actions">
-        <button class="logBtn primary" data-id="${s.id}">Performances</button>
-        <button class="setlistAddBtn" data-id="${s.id}">+ Setlist</button>
-        <button class="editBtn" data-id="${s.id}">Edit</button>
+      <div class="card-body">
+        ${renderRangeStrip(s.low_note, s.high_note, s.range_source, s.key_notes, s.title, s.artist)}
+        <div class="card-meta">
+          ${s.genre ? `<span>${escapeHtml(s.genre)}</span>` : ""}
+          ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : ""}
+        </div>
+        <div class="card-actions">
+          <button class="logBtn primary" data-id="${s.id}">Performances</button>
+          <button class="setlistAddBtn" data-id="${s.id}">+ Setlist</button>
+          <button class="editBtn" data-id="${s.id}">Edit</button>
+        </div>
       </div>
     </div>
   `).join("");
 
+  document.querySelectorAll(".card-head").forEach(el=>{
+    el.onclick = (e) => {
+      // Don't toggle expand when the click was actually on the status
+      // pill or its editor — those have their own handlers below.
+      if(e.target.closest(".status-pill") || e.target.closest(".status-edit-select")) return;
+      toggleCardExpand(el.dataset.id);
+    };
+  });
   document.querySelectorAll(".status-pill").forEach(el=>{
-    el.onclick = () => { editingStatusId = el.dataset.id; render(); };
+    el.onclick = (e) => { e.stopPropagation(); editingStatusId = el.dataset.id; render(); };
   });
   document.querySelectorAll(".status-edit-select").forEach(sel=>{
+    sel.onclick = (e) => e.stopPropagation();
     sel.onchange = () => updateStatus(sel.dataset.id, sel.value);
     sel.onblur = () => { editingStatusId = null; render(); };
     setTimeout(()=>sel.focus(), 0);
@@ -658,6 +677,20 @@ function renderSongbook(){
   document.querySelectorAll(".logBtn").forEach(b=>b.onclick = ()=>openLog(b.dataset.id));
   document.querySelectorAll(".setlistAddBtn").forEach(b=>b.onclick = ()=>openAddToSetlist(b.dataset.id));
   document.querySelectorAll(".editBtn").forEach(b=>b.onclick = ()=>openEdit(b.dataset.id));
+}
+
+// Toggles one card's expanded state directly in the DOM (no full render(),
+// so scroll position and every other card stay untouched) while keeping
+// expandedCardIds in sync so a later render() for an unrelated reason
+// (search, filter, sort, a status change) still shows this card the way
+// the person left it.
+function toggleCardExpand(id){
+  const card = document.querySelector(`.card[data-id="${id}"]`);
+  if(!card) return;
+  const isExpanded = card.classList.toggle("expanded");
+  if(isExpanded) expandedCardIds.add(id); else expandedCardIds.delete(id);
+  const chevron = card.querySelector(".card-chevron");
+  if(chevron) chevron.textContent = isExpanded ? "▲" : "▼";
 }
 
 async function updateStatus(id, newStatus){

@@ -192,6 +192,11 @@
     to{opacity:0; transform:scale(0.97); max-height:0; margin-bottom:0; padding-top:0; padding-bottom:0; overflow:hidden;}
   }
   .card-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
+  .card-head{cursor:pointer;}
+  .card-head-right{display:flex; align-items:center; gap:8px;}
+  .card-chevron{font-family:'IBM Plex Mono',monospace; font-size:9px; color:var(--cream-dim); flex-shrink:0;}
+  .card-body{display:none;}
+  .card.expanded .card-body{display:block;}
   .title{font-weight:700; font-size:16px; line-height:1.25;}
   .karafun-badge{
     display:inline-flex; align-items:center; justify-content:center;
