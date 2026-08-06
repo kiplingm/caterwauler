@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "33";
+const BUILD_VERSION = "34";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -362,23 +362,57 @@ function lerpColor(a, b, t){
   return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
 }
 
-// Builds the fixed background gradient for the range track: a saturated
-// "range finder" overlay that is red outside the comfort zone and green
-// within it. Position is the same on every card since it's derived from
-// the user's comfort range, not from any individual song.
-function buildRangeOverlay(comfortLeft, comfortRight){
+// The colored vertical strip that runs down the left edge of the whole
+// card (a sibling of card-top/card-body, not nested inside the text
+// content) — replaces the old horizontal range-track bar. Red padding
+// top/bottom, green in the middle for the comfort zone, with a glowing
+// marker showing exactly where this song's own notes fall within that
+// span. Unlike the old bar, this stays visible even when a Songbook
+// card is collapsed, since it's part of the card's own edge.
+function renderCardStrip(low, high){
+  const lowS = noteToSemitone(low), highS = noteToSemitone(high);
+
+  if(comfortLowS === null || comfortHighS === null){
+    return `<div class="card-strip card-strip-unset"></div>`;
+  }
+
+  // Same padding logic as before: a few semitones past comfort on each
+  // side, widened further if the song's own range would otherwise get
+  // clipped at the edge.
+  let spanLow = comfortLowS - 4, spanHigh = comfortHighS + 4;
+  if(lowS !== null) spanLow = Math.min(spanLow, lowS - 1);
+  if(highS !== null) spanHigh = Math.max(spanHigh, highS + 1);
+  const span = spanHigh - spanLow;
+  // pct is "percent of the way up from the bottom" — bottom = lowest
+  // pitch, top = highest, like a thermometer.
+  const pct = v => Math.max(0, Math.min(100, ((v - spanLow)/span)*100));
+
+  const comfortBottom = pct(comfortLowS), comfortTop = pct(comfortHighS);
+  // CSS linear-gradient(180deg,...) reads top-to-bottom, so convert
+  // "percent from bottom" into "percent from top" for the gradient stops.
+  const zoneTopPct = 100 - comfortTop, zoneBottomPct = 100 - comfortBottom;
   const c = getFitColors();
-  const rgba = (rgb, a) => `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;
-  return `linear-gradient(90deg,
-    ${rgba(c.red,0.32)} 0%,
-    ${rgba(c.red,0.32)} ${comfortLeft}%,
-    ${rgba(c.green,0.16)} ${comfortLeft}%,
-    ${rgba(c.green,0.16)} ${comfortRight}%,
-    ${rgba(c.red,0.32)} ${comfortRight}%,
-    ${rgba(c.red,0.32)} 100%)`;
+  const rgb = ([r,g,b]) => `rgb(${r},${g},${b})`;
+  const background = `linear-gradient(180deg,
+    ${rgb(c.red)} 0%, ${rgb(c.red)} ${zoneTopPct}%,
+    ${rgb(c.green)} ${zoneTopPct}%, ${rgb(c.green)} ${zoneBottomPct}%,
+    ${rgb(c.red)} ${zoneBottomPct}%, ${rgb(c.red)} 100%)`;
+
+  let markerHtml = "";
+  if(lowS !== null && highS !== null){
+    const songBottom = pct(lowS), songTop = pct(highS);
+    const markerTop = 100 - songTop;
+    const markerHeight = Math.max(songTop - songBottom, 4); // floor so a narrow song is still visible
+    markerHtml = `<div class="card-strip-marker" style="top:${markerTop}%; height:${markerHeight}%;"></div>`;
+  }
+
+  return `<div class="card-strip" style="background:${background};">${markerHtml}</div>`;
 }
 
-function renderRangeStrip(low, high, rangeSource, keyNotes, title, artist){
+// Key notes + the fit line ("IN RANGE - A2-E4") + the Spotify/YouTube
+// icon links — the text/action content that lives in the card body,
+// separate from the visual strip above.
+function renderRangeInfo(low, high, rangeSource, keyNotes, title, artist){
   const lowS = noteToSemitone(low), highS = noteToSemitone(high);
   const fit = fitLabel(lowS, highS);
 
@@ -387,65 +421,18 @@ function renderRangeStrip(low, high, rangeSource, keyNotes, title, artist){
     : (lowS!==null && highS!==null && rangeSource === "verified")
     ? `<span class="range-source-tag range-source-verified" title="Checked against a specific vocal reference">✓ verified</span>`
     : "";
-  const iconLinksHtml = (title && artist) ? externalLinksHtml(title, artist) : "";
-
-  // Key notes and the fit line form a two-line text stack that sits next
-  // to the Spotify/YouTube icons — key notes top-aligned with the icons,
-  // the fit line bottom-aligned with them — instead of the fit line
-  // sitting as its own separate row underneath everything.
-  function buildInfoRow(fitLine){
-    return `
-      <div class="range-info-row">
-        <div class="range-text-stack">
-          <div class="range-key-notes">${keyNotes ? escapeHtml(keyNotes) : ""}</div>
-          ${fitLine}
-        </div>
-        ${iconLinksHtml}
-      </div>`;
-  }
-
-  // No comfort range set yet — skip the color-coded track entirely rather
-  // than drawing a misleading one against a range nobody chose.
-  if(comfortLowS === null || comfortHighS === null){
-    const fitLine = `<div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${sourceTag}</div>`;
-    return `
-      <div class="range-strip">
-        <div class="range-track range-track-unset"></div>
-        ${buildInfoRow(fitLine)}
-      </div>`;
-  }
-
-  // Pad the visual span a few semitones past comfort on each side, but
-  // widen further if this particular song's own range falls outside that
-  // padding so it doesn't get invisibly clipped at the track's edge.
-  let spanLow = comfortLowS - 4, spanHigh = comfortHighS + 4;
-  if(lowS !== null) spanLow = Math.min(spanLow, lowS - 1);
-  if(highS !== null) spanHigh = Math.max(spanHigh, highS + 1);
-  const span = spanHigh - spanLow;
-  const pct = v => Math.max(0, Math.min(100, ((v - spanLow)/span)*100));
-
-  const comfortLeft = pct(comfortLowS), comfortRight = pct(comfortHighS);
-  const overlay = buildRangeOverlay(comfortLeft, comfortRight);
-
-  let songLine = "";
-  if(lowS!==null && highS!==null){
-    const l = pct(lowS), r = pct(highS);
-    const width = Math.max(r-l, 2.5);
-    songLine = `<div class="range-song-line" style="left:${l}%; width:${width}%;"></div>`;
-  }
   const suggestionHtml = fit.cls === "fit-out"
     ? `<span class="transpose-suggestion">${transpositionMessage(lowS, highS)}</span>`
     : "";
-  const fitLine = `<div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${sourceTag}${suggestionHtml}</div>`;
+  const iconLinksHtml = (title && artist) ? externalLinksHtml(title, artist) : "";
+
   return `
-    <div class="range-strip">
-      <div class="range-track">
-        <div class="range-overlay" style="background:${overlay};"></div>
-        <div class="range-bound" style="left:${comfortLeft}%;"></div>
-        <div class="range-bound" style="left:${comfortRight}%;"></div>
-        ${songLine}
+    <div class="range-info-row">
+      <div class="range-text-stack">
+        <div class="range-key-notes">${keyNotes ? escapeHtml(keyNotes) : ""}</div>
+        <div class="range-fit ${fit.cls}">${fit.text}${lowS!==null&&highS!==null ? ` · ${low}–${high}` : ""}${sourceTag}${suggestionHtml}</div>
       </div>
-      ${buildInfoRow(fitLine)}
+      ${iconLinksHtml}
     </div>`;
 }
 
@@ -515,18 +502,21 @@ function renderSingNow(){
     <div class="sing-now-intro">Your next best picks, right now:</div>
     ${picks.map(s => `
       <div class="card sing-now-card" data-id="${s.id}">
-        <div class="card-top">
-          <div>
-            <div class="title">${escapeHtml(s.title)}${s.in_karafun ? `<span class="karafun-badge" title="In the KaraFun catalog">K</span>` : ""}</div>
-            <div class="artist">${escapeHtml(s.artist)}</div>
+        ${renderCardStrip(s.low_note, s.high_note)}
+        <div class="card-content">
+          <div class="card-top">
+            <div>
+              <div class="title">${escapeHtml(s.title)}${s.in_karafun ? `<span class="karafun-badge" title="In the KaraFun catalog">K</span>` : ""}</div>
+              <div class="artist">${escapeHtml(s.artist)}</div>
+            </div>
           </div>
-        </div>
-        ${renderRangeStrip(s.low_note, s.high_note, s.range_source, null, s.title, s.artist)}
-        <div class="card-meta">
-          ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : `<span>Never logged</span>`}
-        </div>
-        <div class="card-actions">
-          <button class="logBtn primary sing-it-btn" data-id="${s.id}">Sing it →</button>
+          ${renderRangeInfo(s.low_note, s.high_note, s.range_source, null, s.title, s.artist)}
+          <div class="card-meta">
+            ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : `<span>Never logged</span>`}
+          </div>
+          <div class="card-actions">
+            <button class="logBtn primary sing-it-btn" data-id="${s.id}">Sing it →</button>
+          </div>
         </div>
       </div>
     `).join("")}
@@ -626,32 +616,35 @@ function renderSongbook(){
 
   listEl.innerHTML = filtered.map(s => `
     <div class="card ${expandedCardIds.has(s.id) ? "expanded" : ""}" data-id="${s.id}">
-      <div class="card-top card-head" data-id="${s.id}">
-        <div>
-          <div class="title">${escapeHtml(s.title)}${s.in_karafun ? `<span class="karafun-badge" title="In the KaraFun catalog">K</span>` : ""}</div>
-          <div class="artist">${escapeHtml(s.artist)}</div>
+      ${renderCardStrip(s.low_note, s.high_note)}
+      <div class="card-content">
+        <div class="card-top card-head" data-id="${s.id}">
+          <div>
+            <div class="title">${escapeHtml(s.title)}${s.in_karafun ? `<span class="karafun-badge" title="In the KaraFun catalog">K</span>` : ""}</div>
+            <div class="artist">${escapeHtml(s.artist)}</div>
+          </div>
+          <div class="card-head-right">
+            ${editingStatusId === s.id ? `
+              <select class="status-edit-select" data-id="${s.id}">
+                ${STATUS_OPTIONS.map(opt => `<option value="${opt}" ${opt===s.status?"selected":""}>${opt}</option>`).join("")}
+              </select>
+            ` : `
+              <div class="status-pill status-${s.status}" data-id="${s.id}"><span class="status-icon">${STATUS_ICONS[s.status]||""}</span> ${s.status}</div>
+            `}
+            <span class="card-chevron">${expandedCardIds.has(s.id) ? "▲" : "▼"}</span>
+          </div>
         </div>
-        <div class="card-head-right">
-          ${editingStatusId === s.id ? `
-            <select class="status-edit-select" data-id="${s.id}">
-              ${STATUS_OPTIONS.map(opt => `<option value="${opt}" ${opt===s.status?"selected":""}>${opt}</option>`).join("")}
-            </select>
-          ` : `
-            <div class="status-pill status-${s.status}" data-id="${s.id}"><span class="status-icon">${STATUS_ICONS[s.status]||""}</span> ${s.status}</div>
-          `}
-          <span class="card-chevron">${expandedCardIds.has(s.id) ? "▲" : "▼"}</span>
-        </div>
-      </div>
-      <div class="card-body">
-        ${renderRangeStrip(s.low_note, s.high_note, s.range_source, s.key_notes, s.title, s.artist)}
-        <div class="card-meta">
-          ${s.genre ? `<span>${escapeHtml(s.genre)}</span>` : ""}
-          ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : ""}
-        </div>
-        <div class="card-actions">
-          <button class="logBtn primary" data-id="${s.id}">Performances</button>
-          <button class="setlistAddBtn" data-id="${s.id}">+ Setlist</button>
-          <button class="editBtn" data-id="${s.id}">Edit</button>
+        <div class="card-body">
+          ${renderRangeInfo(s.low_note, s.high_note, s.range_source, s.key_notes, s.title, s.artist)}
+          <div class="card-meta">
+            ${s.genre ? `<span>${escapeHtml(s.genre)}</span>` : ""}
+            ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : ""}
+          </div>
+          <div class="card-actions">
+            <button class="logBtn primary" data-id="${s.id}">Performances</button>
+            <button class="setlistAddBtn" data-id="${s.id}">+ Setlist</button>
+            <button class="editBtn" data-id="${s.id}">Edit</button>
+          </div>
         </div>
       </div>
     </div>

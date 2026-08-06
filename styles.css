@@ -66,11 +66,11 @@
   body[data-theme="contrast"] .card,
   body[data-theme="contrast"] input,
   body[data-theme="contrast"] select,
-  body[data-theme="contrast"] .range-track,
   body[data-theme="contrast"] .chip,
   body[data-theme="contrast"] .gear-btn{
     border-width:2px;
   }
+  body[data-theme="contrast"] .card-strip{width:10px;}
   body[data-theme="contrast"] .card-actions button{
     border-width:2px;
   }
@@ -176,8 +176,16 @@
 
   .list{padding:8px 14px 20px; display:flex; flex-direction:column; gap:10px;}
   .card{
-    background:var(--bg-raised); border:1px solid var(--line); border-radius:14px; padding:14px 14px 12px;
+    background:var(--bg-raised); border:1px solid var(--line); border-radius:14px;
+    display:flex; overflow:hidden;
     animation:card-in 0.22s ease both;
+  }
+  .card-content{flex:1; min-width:0; padding:14px 14px 12px;}
+  .card-strip{width:6px; flex-shrink:0; position:relative;}
+  .card-strip-unset{background:repeating-linear-gradient(45deg, #14171b, #14171b 6px, #0d0f12 6px, #0d0f12 12px);}
+  .card-strip-marker{
+    position:absolute; left:0; right:0; background:var(--teal); border-radius:2px;
+    box-shadow:0 0 6px var(--teal), 0 0 10px var(--teal);
   }
   .card.removing{
     animation:card-out 0.2s ease both;
@@ -189,7 +197,7 @@
   }
   @keyframes card-out{
     from{opacity:1; transform:scale(1); max-height:400px; margin-bottom:10px;}
-    to{opacity:0; transform:scale(0.97); max-height:0; margin-bottom:0; padding-top:0; padding-bottom:0; overflow:hidden;}
+    to{opacity:0; transform:scale(0.97); max-height:0; margin-bottom:0; overflow:hidden;}
   }
   .card-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
   .card-head{cursor:pointer;}
@@ -231,21 +239,9 @@
   }
   .range-source-verified{color:var(--green); opacity:0.9;}
 
-  .range-strip{margin-top:12px;}
-  .range-track{
-    position:relative; height:26px; border-radius:8px; background:#0d0f12;
-    border:1px solid var(--line); overflow:hidden;
-  }
-  .range-overlay{position:absolute; inset:0; pointer-events:none;}
-  .range-track-unset{background:repeating-linear-gradient(45deg, #14171b, #14171b 6px, #0d0f12 6px, #0d0f12 12px);}
-  .range-bound{position:absolute; top:2px; bottom:2px; width:1px; background:var(--cream); opacity:0.3; z-index:2;}
-  .range-song-line{
-    position:absolute; top:50%; height:3px; margin-top:-1.5px; border-radius:1.5px;
-    background:var(--teal); box-shadow:0 0 8px var(--teal), 0 0 16px var(--teal); z-index:3;
-  }
+  .range-info-row{display:flex; justify-content:space-between; align-items:stretch; gap:10px; margin-top:12px;}
   .range-fit{font-family:'IBM Plex Mono',monospace; font-size:10px;}
   .range-key-notes{font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--cream-dim); min-height:1em;}
-  .range-info-row{display:flex; justify-content:space-between; align-items:stretch; gap:10px; margin-top:6px;}
   .range-text-stack{display:flex; flex-direction:column; justify-content:space-between;}
   .fit-easy{color:var(--green);} .fit-out{color:var(--red);} .fit-unknown{color:var(--cream-dim);}
 
