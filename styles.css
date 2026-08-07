@@ -202,8 +202,12 @@
   }
   .card-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
   .card-head{cursor:pointer;}
-  .card-head-right{display:flex; align-items:center; gap:8px;}
-  .card-chevron{font-family:'IBM Plex Mono',monospace; font-size:9px; color:var(--cream-dim); flex-shrink:0;}
+  .card-head-right{display:flex; align-items:center; gap:14px;}
+  .card-chevron{
+    font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--cream-dim); flex-shrink:0;
+    width:26px; height:26px; border-radius:50%; border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+  }
   .card-body{display:none;}
   .card.expanded .card-body{display:block;}
   .title{font-weight:700; font-size:16px; line-height:1.25;}
