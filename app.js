@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "37";
+const BUILD_VERSION = "38";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -369,47 +369,6 @@ function lerpColor(a, b, t){
 // marker showing exactly where this song's own notes fall within that
 // span. Unlike the old bar, this stays visible even when a Songbook
 // card is collapsed, since it's part of the card's own edge.
-// Horizontal version of the range indicator, used only by Sing Now —
-// unlike Songbook, those cards never collapse, so the vertical strip's
-// main advantage (staying visible while collapsed) doesn't apply there,
-// and the wider horizontal bar's shape (not just in/out color) reads
-// better on a screen that's specifically for deciding what to sing next.
-function renderHorizontalBar(low, high){
-  const lowS = noteToSemitone(low), highS = noteToSemitone(high);
-
-  if(comfortLowS === null || comfortHighS === null){
-    return `<div class="range-track range-track-unset"></div>`;
-  }
-
-  let spanLow = comfortLowS - 4, spanHigh = comfortHighS + 4;
-  if(lowS !== null) spanLow = Math.min(spanLow, lowS - 1);
-  if(highS !== null) spanHigh = Math.max(spanHigh, highS + 1);
-  const span = spanHigh - spanLow;
-  const pct = v => Math.max(0, Math.min(100, ((v - spanLow)/span)*100));
-
-  const comfortLeft = pct(comfortLowS), comfortRight = pct(comfortHighS);
-  const c = getFitColors();
-  const rgba = (rgb, a) => `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;
-  const overlay = `linear-gradient(90deg,
-    ${rgba(c.red,0.32)} 0%, ${rgba(c.red,0.32)} ${comfortLeft}%,
-    ${rgba(c.green,0.16)} ${comfortLeft}%, ${rgba(c.green,0.16)} ${comfortRight}%,
-    ${rgba(c.red,0.32)} ${comfortRight}%, ${rgba(c.red,0.32)} 100%)`;
-
-  let songLine = "";
-  if(lowS!==null && highS!==null){
-    const l = pct(lowS), r = pct(highS);
-    const width = Math.max(r-l, 2.5);
-    songLine = `<div class="range-song-line" style="left:${l}%; width:${width}%;"></div>`;
-  }
-  return `
-    <div class="range-track">
-      <div class="range-overlay" style="background:${overlay};"></div>
-      <div class="range-bound" style="left:${comfortLeft}%;"></div>
-      <div class="range-bound" style="left:${comfortRight}%;"></div>
-      ${songLine}
-    </div>`;
-}
-
 function renderCardStrip(low, high){
   const lowS = noteToSemitone(low), highS = noteToSemitone(high);
 
@@ -543,6 +502,7 @@ function renderSingNow(){
     <div class="sing-now-intro">Your next best picks, right now:</div>
     ${picks.map(s => `
       <div class="card sing-now-card ${expandedCardIds.has(s.id) ? "expanded" : ""}" data-id="${s.id}">
+        ${renderCardStrip(s.low_note, s.high_note)}
         <div class="card-content">
           <div class="card-top card-head" data-id="${s.id}">
             <div>
@@ -552,7 +512,6 @@ function renderSingNow(){
             <span class="card-chevron">${expandedCardIds.has(s.id) ? "▲" : "▼"}</span>
           </div>
           <div class="card-body">
-            ${renderHorizontalBar(s.low_note, s.high_note)}
             ${renderRangeInfo(s.low_note, s.high_note, s.range_source, null, s.title, s.artist)}
             <div class="card-meta">
               ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : `<span>Never logged</span>`}
