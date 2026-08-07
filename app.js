@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "40";
+const BUILD_VERSION = "41";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -1122,8 +1122,46 @@ async function loadVenueHistory(){
   return venueHistory;
 }
 
-async function queryPhoton(q, useBias){
-  const bias = useBias ? `&lat=47.2529&lon=-122.4443` : "";
+// --- Geolocation bias: use the device's real location when available so
+// nearby venues rank first and small local businesses are more likely to
+// surface at all. Falls back to a fixed Tacoma-area point if permission is
+// denied, unavailable, or the browser doesn't support it. Cached for the
+// session so we only ever prompt once.
+const DEFAULT_VENUE_COORDS = {lat: 47.2529, lon: -122.4443};
+let venueCoordsPromise = null;
+
+function getVenueSearchCoords(){
+  if(venueCoordsPromise) return venueCoordsPromise;
+  venueCoordsPromise = new Promise((resolve) => {
+    if(!navigator.geolocation){ resolve(DEFAULT_VENUE_COORDS); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({lat: pos.coords.latitude, lon: pos.coords.longitude}),
+      () => resolve(DEFAULT_VENUE_COORDS),
+      {enableHighAccuracy: false, timeout: 5000, maximumAge: 10 * 60 * 1000}
+    );
+  });
+  return venueCoordsPromise;
+}
+
+// Peels generic venue-type descriptor words off the end of a query, e.g.
+// "Porchlight Bar and Grill" -> "Porchlight". Map data (OSM) frequently only
+// has the distinctive part of a business name indexed, or omits very new
+// businesses' full "dba" style names, so retrying on just the core name
+// catches matches the full phrase would miss.
+const GENERIC_VENUE_SUFFIX = /\s+(bar\s*(?:and|&)\s*grill|grill\s*(?:and|&)\s*bar|sports\s*bar|bar\s*(?:and|&)\s*lounge|tap\s*house|taphouse|brewing\s*co\.?|brewery|tavern|saloon|pub|lounge|caf[eé]|restaurant|kitchen|bar)\s*$/i;
+
+function stripGenericVenueSuffix(q){
+  let stripped = q;
+  let prev;
+  do{
+    prev = stripped;
+    stripped = stripped.replace(GENERIC_VENUE_SUFFIX, "").trim();
+  }while(stripped !== prev && stripped.length > 0);
+  return stripped.replace(/\s+(?:and|&)\s*$/i, "").trim();
+}
+
+async function queryPhoton(q, coords){
+  const bias = coords ? `&lat=${coords.lat}&lon=${coords.lon}&location_bias_scale=0.2` : "";
   const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=6${bias}`;
   const res = await fetch(url);
   if(!res.ok) return [];
@@ -1135,8 +1173,13 @@ async function queryPhoton(q, useBias){
   }).filter(p => p.label);
 }
 
-async function queryNominatim(q){
-  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(q)}&limit=6&viewbox=-122.62,47.34,-122.34,47.14&bounded=0`;
+async function queryNominatim(q, coords){
+  const c = coords || DEFAULT_VENUE_COORDS;
+  // Roughly a 15-20 mile box around the search origin, used only as a
+  // soft ranking hint (bounded=0 still allows results outside it).
+  const latSpan = 0.25, lonSpan = 0.35;
+  const viewbox = `${c.lon - lonSpan},${c.lat + latSpan},${c.lon + lonSpan},${c.lat - latSpan}`;
+  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(q)}&limit=6&viewbox=${viewbox}&bounded=0`;
   const res = await fetch(url);
   if(!res.ok) return [];
   const data = await res.json();
@@ -1148,19 +1191,29 @@ async function queryNominatim(q){
 
 async function searchPlaces(query){
   const q = query.trim();
+  const coords = await getVenueSearchCoords();
+  const stripped = stripGenericVenueSuffix(q);
+  const hasStripped = stripped && stripped.toLowerCase() !== q.toLowerCase();
   let results = [];
-  try{ results = await queryPhoton(q, true); }catch(e){}
+
+  try{ results = await queryPhoton(q, coords); }catch(e){}
   if(results.length === 0){
-    try{ results = await queryPhoton(q, false); }catch(e){}
+    try{ results = await queryPhoton(q, null); }catch(e){}
+  }
+  if(results.length === 0 && hasStripped){
+    try{ results = await queryPhoton(stripped, coords); }catch(e){}
   }
   // If a multi-word query with a leading word (e.g. an informal nickname like "Jim's")
   // comes up empty, retry against just the trailing words.
   const words = q.split(/\s+/);
   if(results.length === 0 && words.length > 1){
-    try{ results = await queryPhoton(words.slice(1).join(" "), false); }catch(e){}
+    try{ results = await queryPhoton(words.slice(1).join(" "), null); }catch(e){}
   }
   if(results.length === 0){
-    try{ results = await queryNominatim(q); }catch(e){}
+    try{ results = await queryNominatim(q, coords); }catch(e){}
+  }
+  if(results.length === 0 && hasStripped){
+    try{ results = await queryNominatim(stripped, coords); }catch(e){}
   }
   return results;
 }
