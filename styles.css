@@ -139,7 +139,6 @@
     padding:2px 4px 2px;
   }
   .sing-now-card .card-actions{margin-top:10px;}
-  .sing-it-btn{width:100%; font-size:15px; padding:12px;}
   .reshuffle-btn{
     margin-top:4px; align-self:center; background:transparent; border:1px solid var(--line);
     color:var(--cream-dim); font-family:'IBM Plex Mono',monospace; font-size:12px;

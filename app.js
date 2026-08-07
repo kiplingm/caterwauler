@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "39";
+const BUILD_VERSION = "40";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -526,7 +526,9 @@ function renderSingNow(){
               ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : `<span>Never logged</span>`}
             </div>
             <div class="card-actions">
-              <button class="logBtn primary sing-it-btn" data-id="${s.id}">Sing it →</button>
+              <button class="logBtn primary" data-id="${s.id}">Performances</button>
+              <button class="setlistAddBtn" data-id="${s.id}">+ Setlist</button>
+              <button class="editBtn" data-id="${s.id}">Edit</button>
             </div>
           </div>
         </div>
@@ -550,7 +552,9 @@ function renderSingNow(){
     sel.onblur = () => { editingStatusId = null; render(); };
     setTimeout(()=>sel.focus(), 0);
   });
-  document.querySelectorAll(".sing-it-btn").forEach(b => b.onclick = () => openLog(b.dataset.id));
+  document.querySelectorAll(".logBtn").forEach(b=>b.onclick = ()=>openLog(b.dataset.id));
+  document.querySelectorAll(".setlistAddBtn").forEach(b=>b.onclick = ()=>openAddToSetlist(b.dataset.id));
+  document.querySelectorAll(".editBtn").forEach(b=>b.onclick = ()=>openEdit(b.dataset.id));
   document.getElementById("reshuffleBtn").onclick = () => {
     picks.forEach(s => singNowExcludeIds.add(s.id));
     renderSingNow();
