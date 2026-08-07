@@ -66,6 +66,7 @@
   body[data-theme="contrast"] .card,
   body[data-theme="contrast"] input,
   body[data-theme="contrast"] select,
+  body[data-theme="contrast"] .range-track,
   body[data-theme="contrast"] .chip,
   body[data-theme="contrast"] .gear-btn{
     border-width:2px;
@@ -238,6 +239,20 @@
     border-bottom:1px dotted currentColor; cursor:help;
   }
   .range-source-verified{color:var(--green); opacity:0.9;}
+
+  /* Horizontal bar — Sing Now only now (Songbook uses the vertical
+     card-strip instead). */
+  .range-track{
+    position:relative; height:26px; border-radius:8px; background:#0d0f12;
+    border:1px solid var(--line); overflow:hidden; margin-top:12px;
+  }
+  .range-overlay{position:absolute; inset:0; pointer-events:none;}
+  .range-track-unset{background:repeating-linear-gradient(45deg, #14171b, #14171b 6px, #0d0f12 6px, #0d0f12 12px);}
+  .range-bound{position:absolute; top:2px; bottom:2px; width:1px; background:var(--cream); opacity:0.3; z-index:2;}
+  .range-song-line{
+    position:absolute; top:50%; height:3px; margin-top:-1.5px; border-radius:1.5px;
+    background:var(--teal); box-shadow:0 0 8px var(--teal), 0 0 16px var(--teal); z-index:3;
+  }
 
   .range-info-row{display:flex; justify-content:space-between; align-items:stretch; gap:10px; margin-top:12px;}
   .range-fit{font-family:'IBM Plex Mono',monospace; font-size:10px;}
