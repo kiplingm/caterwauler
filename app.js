@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "38";
+const BUILD_VERSION = "39";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -509,7 +509,16 @@ function renderSingNow(){
               <div class="title">${escapeHtml(s.title)}${s.in_karafun ? `<span class="karafun-badge" title="In the KaraFun catalog">K</span>` : ""}</div>
               <div class="artist">${escapeHtml(s.artist)}</div>
             </div>
-            <span class="card-chevron">${expandedCardIds.has(s.id) ? "▲" : "▼"}</span>
+            <div class="card-head-right">
+              ${editingStatusId === s.id ? `
+                <select class="status-edit-select" data-id="${s.id}">
+                  ${STATUS_OPTIONS.map(opt => `<option value="${opt}" ${opt===s.status?"selected":""}>${opt}</option>`).join("")}
+                </select>
+              ` : `
+                <div class="status-pill status-${s.status}" data-id="${s.id}"><span class="status-icon">${STATUS_ICONS[s.status]||""}</span> ${s.status}</div>
+              `}
+              <span class="card-chevron">${expandedCardIds.has(s.id) ? "▲" : "▼"}</span>
+            </div>
           </div>
           <div class="card-body">
             ${renderRangeInfo(s.low_note, s.high_note, s.range_source, null, s.title, s.artist)}
@@ -527,7 +536,19 @@ function renderSingNow(){
   `;
 
   listEl.querySelectorAll(".card-head").forEach(el=>{
-    el.onclick = () => toggleCardExpand(el.dataset.id);
+    el.onclick = (e) => {
+      if(e.target.closest(".status-pill") || e.target.closest(".status-edit-select")) return;
+      toggleCardExpand(el.dataset.id);
+    };
+  });
+  listEl.querySelectorAll(".status-pill").forEach(el=>{
+    el.onclick = (e) => { e.stopPropagation(); editingStatusId = el.dataset.id; render(); };
+  });
+  listEl.querySelectorAll(".status-edit-select").forEach(sel=>{
+    sel.onclick = (e) => e.stopPropagation();
+    sel.onchange = () => updateStatus(sel.dataset.id, sel.value);
+    sel.onblur = () => { editingStatusId = null; render(); };
+    setTimeout(()=>sel.focus(), 0);
   });
   document.querySelectorAll(".sing-it-btn").forEach(b => b.onclick = () => openLog(b.dataset.id));
   document.getElementById("reshuffleBtn").onclick = () => {
