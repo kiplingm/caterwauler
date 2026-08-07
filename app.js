@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "35";
+const BUILD_VERSION = "36";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -542,18 +542,21 @@ function renderSingNow(){
   listEl.innerHTML = `
     <div class="sing-now-intro">Your next best picks, right now:</div>
     ${picks.map(s => `
-      <div class="card sing-now-card" data-id="${s.id}">
+      <div class="card sing-now-card ${expandedCardIds.has(s.id) ? "expanded" : ""}" data-id="${s.id}">
         <div class="card-content">
-          <div class="card-top">
+          <div class="card-top card-head" data-id="${s.id}">
             <div>
               <div class="title">${escapeHtml(s.title)}${s.in_karafun ? `<span class="karafun-badge" title="In the KaraFun catalog">K</span>` : ""}</div>
               <div class="artist">${escapeHtml(s.artist)}</div>
             </div>
+            <span class="card-chevron">${expandedCardIds.has(s.id) ? "▲" : "▼"}</span>
           </div>
-          ${renderHorizontalBar(s.low_note, s.high_note)}
-          ${renderRangeInfo(s.low_note, s.high_note, s.range_source, null, s.title, s.artist)}
-          <div class="card-meta">
-            ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : `<span>Never logged</span>`}
+          <div class="card-body">
+            ${renderHorizontalBar(s.low_note, s.high_note)}
+            ${renderRangeInfo(s.low_note, s.high_note, s.range_source, null, s.title, s.artist)}
+            <div class="card-meta">
+              ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : `<span>Never logged</span>`}
+            </div>
           </div>
           <div class="card-actions">
             <button class="logBtn primary sing-it-btn" data-id="${s.id}">Sing it →</button>
@@ -564,6 +567,9 @@ function renderSingNow(){
     <button class="reshuffle-btn" id="reshuffleBtn">🔀 Give me different picks</button>
   `;
 
+  listEl.querySelectorAll(".card-head").forEach(el=>{
+    el.onclick = () => toggleCardExpand(el.dataset.id);
+  });
   document.querySelectorAll(".sing-it-btn").forEach(b => b.onclick = () => openLog(b.dataset.id));
   document.getElementById("reshuffleBtn").onclick = () => {
     picks.forEach(s => singNowExcludeIds.add(s.id));
