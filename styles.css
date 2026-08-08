@@ -200,7 +200,8 @@
   }
   .card-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
   .card-head{cursor:pointer;}
-  .card-head-right{display:flex; align-items:center; gap:14px;}
+  .card-head-right{display:flex; flex-direction:column; align-items:flex-end; gap:6px;}
+  .card-head-right-row{display:flex; align-items:center; gap:14px;}
   .card-chevron{
     font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--cream-dim); flex-shrink:0;
     width:26px; height:26px; border-radius:50%; border:1px solid var(--line);
@@ -217,7 +218,7 @@
     cursor:help;
   }
   .artist{font-size:13px; color:var(--cream-dim); margin-top:2px;}
-  .card-last-played{font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--cream-dim); margin-top:4px;}
+  .card-last-played{font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--cream-dim); text-align:right; max-width:140px;}
   .status-pill{
     font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:0.4px;
     padding:4px 9px; border-radius:999px; flex:none; text-transform:uppercase;
