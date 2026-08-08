@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "44";
+const BUILD_VERSION = "45";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -511,7 +511,6 @@ function renderSingNow(){
               <div class="artist">${escapeHtml(s.artist)}</div>
             </div>
             <div class="card-head-right">
-              ${s.last_played ? `<div class="card-last-played">Last played ${formatDate(s.last_played)}${s.last_venue ? ` · ${escapeHtml(s.last_venue)}` : ""}</div>` : ""}
               <div class="card-head-right-row">
                 ${editingStatusId === s.id ? `
                   <select class="status-edit-select" data-id="${s.id}">
@@ -522,6 +521,7 @@ function renderSingNow(){
                 `}
                 <span class="card-chevron">${expandedCardIds.has(s.id) ? "▲" : "▼"}</span>
               </div>
+              ${s.last_played ? `<div class="card-last-played">Last played ${formatDate(s.last_played)}${s.last_venue ? ` · ${escapeHtml(s.last_venue)}` : ""}</div>` : ""}
             </div>
           </div>
           <div class="card-body">
@@ -656,7 +656,6 @@ function renderSongbook(){
             <div class="artist">${escapeHtml(s.artist)}</div>
           </div>
           <div class="card-head-right">
-            ${s.last_played ? `<div class="card-last-played">Last played ${formatDate(s.last_played)}${s.last_venue ? ` · ${escapeHtml(s.last_venue)}` : ""}</div>` : ""}
             <div class="card-head-right-row">
               ${editingStatusId === s.id ? `
                 <select class="status-edit-select" data-id="${s.id}">
@@ -667,6 +666,7 @@ function renderSongbook(){
               `}
               <span class="card-chevron">${expandedCardIds.has(s.id) ? "▲" : "▼"}</span>
             </div>
+            ${s.last_played ? `<div class="card-last-played">Last played ${formatDate(s.last_played)}${s.last_venue ? ` · ${escapeHtml(s.last_venue)}` : ""}</div>` : ""}
           </div>
         </div>
         <div class="card-body">
