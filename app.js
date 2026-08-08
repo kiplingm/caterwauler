@@ -2,8 +2,8 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "42";
-const BUILD_DATE = "2026-07-30T11:54:11-07:00";
+const BUILD_VERSION = "43";
+const BUILD_DATE = "2026-08-08T09:00:00-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
 if(buildInfoEl){
@@ -873,6 +873,27 @@ function openEdit(id){
   openSheet();
 }
 
+// Mirrors a manually-entered range from the personal songbook into the
+// shared song_ranges reference table, so KaraFun matching, recommendations,
+// and other users benefit from ranges entered via the edit-song sheet —
+// not just ranges added through the "paste to Claude" research workflow.
+// Best-effort: a failure here shouldn't block or roll back the songs save,
+// since song_ranges is supplementary shared data, not the source of truth
+// for this user's own songbook entry.
+async function syncSongRangeToSharedTable(title, artist, low_note, high_note, source){
+  if(!low_note || !high_note) return;
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/song_ranges?on_conflict=title_normalized,artist_normalized`, {
+      method: "POST",
+      headers: {...HEADERS, "Prefer": "resolution=merge-duplicates"},
+      body: JSON.stringify([{ title, artist, low_note, high_note, source: source || "manual" }])
+    });
+    if(!res.ok) console.warn("song_ranges sync failed:", await res.text());
+  }catch(err){
+    console.warn("song_ranges sync failed:", err.message);
+  }
+}
+
 document.getElementById("btnSave").onclick = async ()=>{
   const id = document.getElementById("editId").value;
   const title = document.getElementById("fTitle").value.trim();
@@ -912,6 +933,7 @@ document.getElementById("btnSave").onclick = async ()=>{
       if(!res.ok) throw new Error("Insert failed");
       showToast("Song added");
     }
+    syncSongRangeToSharedTable(payload.title, payload.artist, payload.low_note, payload.high_note, payload.range_source);
     closeSheet();
     fetchSongs();
   }catch(err){
