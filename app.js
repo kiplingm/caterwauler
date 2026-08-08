@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "41";
+const BUILD_VERSION = "42";
 const BUILD_DATE = "2026-07-30T11:54:11-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -1255,6 +1255,7 @@ function renderVenueSuggestions({previous, places}){
   if(previous.length === 0 && places.length === 0){
     list.innerHTML = `<div class="autocomplete-empty">No matches — keep typing, or enter a new venue</div>`;
     list.classList.add("open");
+    positionAutocompleteList(list);
     return;
   }
   let html = "";
@@ -1284,6 +1285,7 @@ function renderVenueSuggestions({previous, places}){
     };
   });
   list.classList.add("open");
+  positionAutocompleteList(list);
 }
 
 function updateVenueDirectionsLink(){
@@ -1312,11 +1314,62 @@ document.getElementById("lVenue").addEventListener("blur", () => {
 });
 document.getElementById("lVenue").addEventListener("focus", () => {
   const list = document.getElementById("venueSuggestions");
-  if(list.innerHTML.trim()) list.classList.add("open");
+  if(list.innerHTML.trim()){ list.classList.add("open"); positionAutocompleteList(list); }
 });
 
 // --- Catalog autocomplete (searches your 84k-song karafun_catalog table) ---
 let acDebounce = null;
+
+// --- Mobile keyboard awareness -------------------------------------------
+// On phones, opening the on-screen keyboard shrinks the *visible* area
+// without necessarily shrinking the layout viewport our fixed-position
+// sheets are sized against. Two consequences we correct for:
+//   1) An autocomplete dropdown anchored below its input (top:100%) can
+//      render partly or fully behind the keyboard.
+//   2) A bottom sheet's fixed `bottom:0` can end up below the visible area
+//      entirely, so its lower fields (and their dropdowns) are unreachable.
+// window.visualViewport reports the actual visible viewport, so we use it
+// to flip dropdowns upward when there's no room below, and to nudge the
+// open sheet up to sit just above the keyboard.
+const vv = window.visualViewport;
+
+function positionAutocompleteList(list){
+  const input = list.previousElementSibling;
+  if(!input || !vv) return;
+  const inputRect = input.getBoundingClientRect();
+  const visibleBottom = vv.offsetTop + vv.height;
+  const spaceBelow = visibleBottom - inputRect.bottom;
+  const spaceAbove = inputRect.top - vv.offsetTop;
+  const MARGIN = 12;
+  const PREFERRED = 220; // matches the CSS max-height
+
+  if(spaceBelow < 140 && spaceAbove > spaceBelow){
+    list.classList.add("flip-up");
+    list.style.maxHeight = Math.max(100, Math.min(PREFERRED, spaceAbove - MARGIN)) + "px";
+  }else{
+    list.classList.remove("flip-up");
+    list.style.maxHeight = Math.max(100, Math.min(PREFERRED, spaceBelow - MARGIN)) + "px";
+  }
+}
+
+function repositionOpenAutocompleteLists(){
+  document.querySelectorAll(".autocomplete-list.open").forEach(positionAutocompleteList);
+}
+
+function keepActiveSheetAboveKeyboard(){
+  if(!vv) return;
+  const keyboardInset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+  document.querySelectorAll(".sheet.open").forEach(sheet => {
+    sheet.style.bottom = keyboardInset ? `${keyboardInset}px` : "";
+    sheet.style.maxHeight = keyboardInset ? `${vv.height - 16}px` : "";
+  });
+  repositionOpenAutocompleteLists();
+}
+
+if(vv){
+  vv.addEventListener("resize", keepActiveSheetAboveKeyboard);
+  vv.addEventListener("scroll", keepActiveSheetAboveKeyboard);
+}
 
 async function searchCatalog(query){
   if(!query || query.trim().length < 2) return [];
@@ -1346,6 +1399,7 @@ function renderSuggestions(listEl, results, onPick){
     });
   }
   listEl.classList.add("open");
+  positionAutocompleteList(listEl);
 }
 
 function wireAutocomplete(inputId, listId){
@@ -1379,7 +1433,7 @@ function wireAutocomplete(inputId, listId){
     }, 150);
   });
   input.addEventListener("focus", () => {
-    if(list.innerHTML.trim()) list.classList.add("open");
+    if(list.innerHTML.trim()){ list.classList.add("open"); positionAutocompleteList(list); }
   });
 }
 

@@ -319,6 +319,7 @@
     max-height:220px; overflow-y:auto; z-index:60; display:none;
   }
   .autocomplete-list.open{display:block;}
+  .autocomplete-list.flip-up{top:auto; bottom:100%; margin-top:0; margin-bottom:4px;}
   .autocomplete-item{
     padding:10px 12px; border-bottom:1px solid var(--line); cursor:pointer;
   }
