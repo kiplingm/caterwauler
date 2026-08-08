@@ -3,7 +3,7 @@
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
 const BUILD_VERSION = "43";
-const BUILD_DATE = "2026-08-08T09:00:00-07:00";
+const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
 if(buildInfoEl){
@@ -211,19 +211,20 @@ async function askClaude(promptText, boxEl){
 async function fetchSongs(){
   try{
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/songs?select=*,performances(performance_date)&order=title.asc`,
+      `${SUPABASE_URL}/rest/v1/songs?select=*,performances(performance_date,venue)&order=title.asc`,
       {headers: HEADERS}
     );
     if(!res.ok) throw new Error("Fetch failed: " + res.status);
     const raw = await res.json();
     songs = raw.map(s => {
-      const dates = (s.performances || [])
-        .map(p => p.performance_date)
-        .filter(Boolean)
-        .sort();
+      const perfs = (s.performances || [])
+        .filter(p => p.performance_date)
+        .sort((a,b) => a.performance_date.localeCompare(b.performance_date));
+      const mostRecent = perfs.length ? perfs[perfs.length-1] : null;
       return {
         ...s,
-        last_played: dates.length ? dates[dates.length-1] : null,
+        last_played: mostRecent ? mostRecent.performance_date : null,
+        last_venue: mostRecent ? (mostRecent.venue || null) : null,
         fit_score: fitScore(s.low_note, s.high_note)
         // in_karafun comes straight from the row — a DB trigger sets it
         // whenever a song's title/artist is inserted or changed, so there's
@@ -508,6 +509,7 @@ function renderSingNow(){
             <div>
               <div class="title">${escapeHtml(s.title)}${s.in_karafun ? `<span class="karafun-badge" title="In the KaraFun catalog">K</span>` : ""}</div>
               <div class="artist">${escapeHtml(s.artist)}</div>
+              <div class="card-last-played">${s.last_played ? `Last played ${formatDate(s.last_played)}${s.last_venue ? ` · ${escapeHtml(s.last_venue)}` : ""}` : "Never logged"}</div>
             </div>
             <div class="card-head-right">
               ${editingStatusId === s.id ? `
@@ -522,9 +524,6 @@ function renderSingNow(){
           </div>
           <div class="card-body">
             ${renderRangeInfo(s.low_note, s.high_note, s.range_source, null, s.title, s.artist)}
-            <div class="card-meta">
-              ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : `<span>Never logged</span>`}
-            </div>
             <div class="card-actions">
               <button class="logBtn primary" data-id="${s.id}">Performances</button>
               <button class="setlistAddBtn" data-id="${s.id}">+ Setlist</button>
@@ -653,6 +652,7 @@ function renderSongbook(){
           <div>
             <div class="title">${escapeHtml(s.title)}${s.in_karafun ? `<span class="karafun-badge" title="In the KaraFun catalog">K</span>` : ""}</div>
             <div class="artist">${escapeHtml(s.artist)}</div>
+            ${s.last_played ? `<div class="card-last-played">Last played ${formatDate(s.last_played)}${s.last_venue ? ` · ${escapeHtml(s.last_venue)}` : ""}</div>` : ""}
           </div>
           <div class="card-head-right">
             ${editingStatusId === s.id ? `
@@ -667,10 +667,7 @@ function renderSongbook(){
         </div>
         <div class="card-body">
           ${renderRangeInfo(s.low_note, s.high_note, s.range_source, s.key_notes, s.title, s.artist)}
-          <div class="card-meta">
-            ${s.genre ? `<span>${escapeHtml(s.genre)}</span>` : ""}
-            ${s.last_played ? `<span>Last played ${formatDate(s.last_played)}</span>` : ""}
-          </div>
+          ${s.genre ? `<div class="card-meta"><span>${escapeHtml(s.genre)}</span></div>` : ""}
           <div class="card-actions">
             <button class="logBtn primary" data-id="${s.id}">Performances</button>
             <button class="setlistAddBtn" data-id="${s.id}">+ Setlist</button>

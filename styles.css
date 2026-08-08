@@ -217,6 +217,7 @@
     cursor:help;
   }
   .artist{font-size:13px; color:var(--cream-dim); margin-top:2px;}
+  .card-last-played{font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--cream-dim); margin-top:4px;}
   .status-pill{
     font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:0.4px;
     padding:4px 9px; border-radius:999px; flex:none; text-transform:uppercase;
