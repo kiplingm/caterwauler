@@ -231,7 +231,12 @@
     display:inline-flex; align-items:center; justify-content:center;
     width:15px; height:15px; margin-left:6px; vertical-align:2px;
     font-family:'IBM Plex Mono',monospace; font-size:9.5px; font-weight:700;
-    border-radius:4px; background:rgba(61,218,215,0.15); color:var(--teal);
+    border-radius:4px;
+    /* KaraFun's actual brand gradient (pink #D5167A -> purple #670C75),
+       so the badge reads as "KaraFun" at a glance rather than just
+       borrowing the app's own teal accent color. */
+    background:linear-gradient(135deg, #D5167A, #670C75);
+    color:#fff;
     cursor:help;
   }
   .artist{font-size:13px; color:var(--cream-dim); margin-top:2px;}
