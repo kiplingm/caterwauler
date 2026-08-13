@@ -1,4 +1,4 @@
-# Setlist Sherpa
+# Caterwauler
 Live, multi-user karaoke songbook synced to Supabase.
 
 This is the one and only app in active use — an earlier separate project
