@@ -107,6 +107,7 @@
   .gear-btn{
     flex:none; background:var(--bg-raised); border:1px solid var(--line); border-radius:10px;
     width:38px; height:38px; font-size:18px; color:var(--cream-dim); line-height:1;
+    display:flex; align-items:center; justify-content:center;
   }
   .gear-btn:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible{
     outline:2px solid var(--teal); outline-offset:2px;
@@ -133,6 +134,7 @@
     background:var(--bg-raised);
   }
   .view-tab.active{border-color:var(--gold); color:var(--gold); background:rgba(232,183,78,0.1);}
+  .view-tab svg{vertical-align:-3px; margin-right:5px;}
 
   .sing-now-intro{
     font-family:'IBM Plex Mono',monospace; font-size:11.5px; letter-spacing:0.3px; color:var(--cream-dim);
@@ -145,6 +147,7 @@
     padding:9px 16px; border-radius:999px;
   }
   .reshuffle-btn:active{border-color:var(--teal); color:var(--teal);}
+  .reshuffle-btn svg{vertical-align:-2px; margin-right:5px;}
 
   .controls{padding:14px 18px 4px; display:flex; flex-direction:column; gap:10px;}
   .search-row{display:flex; gap:8px;}
