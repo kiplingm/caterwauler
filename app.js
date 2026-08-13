@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "45";
+const BUILD_VERSION = "46";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -91,7 +91,12 @@ function applyRange(comfortLow, comfortHigh){
 
 
 let songs = [];
-let activeFilter = "All";
+// Status filter is multi-select: an empty Set means "no filter applied"
+// (equivalent to the old "All" chip), rather than requiring an explicit
+// All state to be tracked and kept in sync with the individual chips.
+let activeFilters = new Set();
+// KaraFun-only toggle, independent of status filters — ANDed together.
+let karafunOnly = false;
 // Songbook cards are collapsed (title/artist/status only) by default and
 // expand on tap to reveal range/meta/actions. Session-only (not persisted
 // anywhere) — resets to all-collapsed on next load, same as search/sort/
@@ -135,15 +140,28 @@ document.getElementById("sortSelect").addEventListener("change", e=>{
 const listEl = document.getElementById("list");
 const countRow = document.getElementById("countRow");
 const chipsEl = document.getElementById("chips");
-const FILTERS = ["All","Solid","Learning","Maybe","Suggested","Retired","Test"];
+// No "All" entry — an empty activeFilters Set already means unfiltered,
+// so every chip here toggles independently.
+const FILTERS = ["Solid","Learning","Maybe","Suggested","Retired","Test"];
 
 FILTERS.forEach(f=>{
   const c = document.createElement("button");
-  c.className = "chip" + (f==="All" ? " active" : "");
+  c.className = "chip";
   c.textContent = f;
-  c.onclick = () => { activeFilter = f; document.querySelectorAll(".chip").forEach(x=>x.classList.remove("active")); c.classList.add("active"); render(); };
+  c.onclick = () => {
+    if(activeFilters.has(f)){ activeFilters.delete(f); c.classList.remove("active"); }
+    else{ activeFilters.add(f); c.classList.add("active"); }
+    render();
+  };
   chipsEl.appendChild(c);
 });
+
+const karafunSwitch = document.getElementById("karafunSwitch");
+karafunSwitch.onclick = () => {
+  karafunOnly = !karafunOnly;
+  karafunSwitch.classList.toggle("on", karafunOnly);
+  render();
+};
 
 document.getElementById("search").addEventListener("input", e=>{
   searchTerm = e.target.value.toLowerCase();
@@ -564,9 +582,10 @@ function renderSingNow(){
 
 function renderSongbook(){
   let filtered = songs.filter(s=>{
-    const matchesFilter = activeFilter==="All" || s.status===activeFilter;
+    const matchesFilter = activeFilters.size===0 || activeFilters.has(s.status);
+    const matchesKarafun = !karafunOnly || !!s.in_karafun;
     const matchesSearch = !searchTerm || (s.title||"").toLowerCase().includes(searchTerm) || (s.artist||"").toLowerCase().includes(searchTerm);
-    return matchesFilter && matchesSearch;
+    return matchesFilter && matchesKarafun && matchesSearch;
   });
 
   filtered = filtered.slice().sort((a,b)=>{
