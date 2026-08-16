@@ -83,11 +83,20 @@ after a deploy, silently undoing whatever just shipped.
   just won't fire for those specific songs.
 
 ## To do
-- Create test users and support admin impersonation of them, restricted
-  to admins only. `kiplingm@gmail.com` is the only admin for now — needs
-  an `is_admin` flag (or admin allowlist) plus an impersonation flow that
-  respects the existing per-user RLS policies rather than bypassing them
-  outright.
+- ~~Create test users and support admin impersonation of them~~ — done
+  (build 51+): read-only "View as" lookup in Admin, backed by the
+  `admin-view-as` Edge Function. Deliberately not a session takeover —
+  admin sees a summary (range, song counts, setlists, last sign-in) for
+  one target user_id at a time, never mints a token or acts as them.
+- **Manual step needed**: add `https://kiplingm.github.io/caterwauler/`
+  to Supabase Dashboard → Authentication → URL Configuration → Redirect
+  URLs (repo/Pages URL renamed from setlist-sherpa in build 51). Until
+  this is added, magic-link email redirects may fail on the new URL —
+  the 6-digit code fallback still works regardless.
+- **Manual step needed**: paste the updated Magic Link email template
+  (Caterwauler branding + Add-to-Home-Screen blurb) into Supabase
+  Dashboard → Authentication → Email Templates → Magic Link. Draft was
+  provided in chat, not stored in-repo since it's dashboard-only config.
 - Shazam-style song ID: let a user record/hum a snippet (or point at a
   live speaker) to identify a song and jump straight to adding/rating it
   in the songbook, instead of manual search entry.
@@ -102,3 +111,11 @@ after a deploy, silently undoing whatever just shipped.
 - Once on the Dell XPS: revisit the parked automated vocal-range
   extraction pipeline (yt-dlp + Demucs + CREPE/pYIN) — a better use of
   local compute than further Supabase micro-optimization.
+- **Security**: `public.lastfm_popularity_cache` and
+  `public.artist_similarity_cache` have RLS disabled — fully readable/
+  writable by anyone with the anon key. Low risk today (cache data only,
+  no user data), but worth locking down before wider testing:
+  `ALTER TABLE public.lastfm_popularity_cache ENABLE ROW LEVEL SECURITY;`
+  `ALTER TABLE public.artist_similarity_cache ENABLE ROW LEVEL SECURITY;`
+  — needs matching read policies added at the same time or these tables
+  go dark for the app itself.
