@@ -302,6 +302,16 @@
     <label>SIGNED IN AS</label>
     <div class="artist" id="accountEmail">—</div>
   </div>
+  <div class="field">
+    <label>USERNAME</label>
+    <div class="artist" style="margin-bottom:8px;">
+      Your handle — will be how friends find and add you once friending
+      is live. Lowercase letters, numbers, and hyphens only.
+    </div>
+    <input type="text" id="usernameInput" placeholder="username" style="width:100%; margin-bottom:8px;" maxlength="20">
+    <button class="check-missing-btn" id="saveUsernameBtn">Save username</button>
+    <div id="usernameError" class="artist" style="display:none; color:#e85d4f; margin-top:6px;"></div>
+  </div>
 
   <div class="settings-section-label">Invite</div>
   <div class="field">
@@ -541,6 +551,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=55"></script>
+<script src="app.js?v=56"></script>
 </body>
 </html>

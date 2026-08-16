@@ -83,6 +83,16 @@ after a deploy, silently undoing whatever just shipped.
   just won't fire for those specific songs.
 
 ## To do
+- **Friending system** (build 56 laid the groundwork): `profiles.username`
+  now exists — auto-generated from the email local-part on sign-up
+  (slugified, `-2`/`-3` suffix on collision), editable in Settings,
+  enforced unique via `profiles_username_unique_idx` on `lower(username)`.
+  Still needed for actual friending: `profiles` RLS is currently
+  "select own row only," so there's no way for one user to look up
+  another by username yet. Will need either a narrow public view
+  (`id`, `username` only — no email/range/etc.) or a `search_users`
+  RPC, plus a `friendships` table (requester_id, addressee_id, status)
+  and request/accept UI.
 - ~~Create test users and support admin impersonation of them~~ — done
   (build 53): dedicated Users screen in Admin (`usersSheet`) — full
   roster with last-active time via `admin-list-users`, expandable

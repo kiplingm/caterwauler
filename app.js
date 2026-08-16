@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "55";
+const BUILD_VERSION = "56";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -2622,6 +2622,7 @@ async function loadUsersList(){
           <span class="user-row-email">${escapeHtml(u.email)}${u.is_admin ? '<span class="user-row-tag">admin</span>' : ""}${u.email === currentUserEmail ? '<span class="user-row-tag">you</span>' : ""}</span>
         </div>
         <div class="user-row-meta">
+          @${escapeHtml(u.username || "—")}<br>
           ${relativeActiveLabel(u.last_sign_in_at)} — last: ${fullDateTime(u.last_sign_in_at)}<br>
           Joined ${fullDateTime(u.created_at)}${u.email_confirmed ? "" : " · unconfirmed"}
         </div>
@@ -2991,6 +2992,60 @@ document.getElementById("rangeModeManualBtn").onclick = async () => {
     : "Saved locally — couldn't reach the server");
 };
 
+// Usernames are the basis for the eventual friending system, so they're
+// validated more strictly than a free-text field: lowercase letters,
+// numbers, hyphens only, 3-20 chars. The DB enforces uniqueness via a
+// unique index on lower(username) — this just gives a friendly message
+// instead of a raw Postgres constraint error when that fires.
+document.getElementById("saveUsernameBtn").onclick = async () => {
+  const input = document.getElementById("usernameInput");
+  const errEl = document.getElementById("usernameError");
+  errEl.style.display = "none";
+
+  const raw = input.value.trim().toLowerCase();
+  if(!/^[a-z0-9-]{3,20}$/.test(raw)){
+    errEl.textContent = "3-20 characters — lowercase letters, numbers, and hyphens only.";
+    errEl.style.display = "block";
+    return;
+  }
+  if(raw === currentUsername){
+    showToast("That's already your username");
+    return;
+  }
+
+  const btn = document.getElementById("saveUsernameBtn");
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+
+  try{
+    const { data: { session } } = await authClient.auth.getSession();
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${session.user.id}`, {
+      method: "PATCH",
+      headers: {...HEADERS, "Prefer":"return=minimal"},
+      body: JSON.stringify({ username: raw, updated_at: new Date().toISOString() })
+    });
+    if(res.ok){
+      currentUsername = raw;
+      input.value = raw;
+      showToast("Username saved");
+    }else{
+      const body = await res.text();
+      if(body.includes("profiles_username_unique_idx") || body.includes("duplicate key")){
+        errEl.textContent = "That username is already taken — try another.";
+      }else{
+        errEl.textContent = "Couldn't save that username. Try again.";
+      }
+      errEl.style.display = "block";
+    }
+  }catch(e){
+    errEl.textContent = "Couldn't reach the server — check your connection and try again.";
+    errEl.style.display = "block";
+  }finally{
+    btn.disabled = false;
+    btn.textContent = "Save username";
+  }
+};
+
 document.getElementById("saveRangeBtn").onclick = async () => {
   const newComfortLow = document.getElementById("rComfortLow").value.trim();
   const newComfortHigh = document.getElementById("rComfortHigh").value.trim();
@@ -3201,6 +3256,7 @@ const authSheet = document.getElementById("authSheet");
 let signedIn = false;
 let currentUserEmail = null;
 let isAdmin = false;
+let currentUsername = null;
 
 async function onSignedIn(session){
   if(signedIn) return; // guard against double-init if the auth event fires twice
@@ -3265,6 +3321,10 @@ async function loadProfileRange(userId){
 
     isAdmin = !!profile.is_admin;
     document.getElementById("adminBtnWrap").style.display = isAdmin ? "" : "none";
+
+    currentUsername = profile.username || null;
+    const usernameEl = document.getElementById("usernameInput");
+    if(usernameEl) usernameEl.value = currentUsername || "";
 
     currentRangeMode = profile.range_mode === "auto" ? "auto" : "manual";
 
