@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "51";
+const BUILD_VERSION = "52";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -2881,6 +2881,7 @@ document.getElementById("saveRangeBtn").onclick = async () => {
 document.getElementById("signOutBtn").onclick = async () => {
   if(!confirm("Sign out?")) return;
   await authClient.auth.signOut();
+  try{ localStorage.removeItem("ss_view"); }catch(e){ /* ignore */ }
   window.location.reload();
 };
 
@@ -3270,6 +3271,8 @@ document.getElementById("authUseDifferentBtn").onclick = () => {
 
   if(params.get("new") === "1"){
     await authClient.auth.signOut();
+    try{ localStorage.removeItem("ss_view"); }catch(e){ /* ignore */ }
+    currentView = "singNow";
     params.delete("new");
     const cleanUrl = window.location.pathname + (params.toString() ? "?" + params.toString() : "");
     window.history.replaceState({}, "", cleanUrl);
@@ -3284,6 +3287,8 @@ document.getElementById("authUseDifferentBtn").onclick = () => {
   const uName = params.get("u");
   if(uName){
     await authClient.auth.signOut();
+    try{ localStorage.removeItem("ss_view"); }catch(e){ /* ignore */ }
+    currentView = "singNow";
     let base = null;
     try{ base = localStorage.getItem("ss_base_email"); }catch(e){ /* ignore */ }
     authBackdrop.classList.add("open");
