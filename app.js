@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "52";
+const BUILD_VERSION = "53";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -2525,8 +2525,6 @@ document.getElementById("adminBtn").onclick = () => {
   if(!isAdmin) return;
   document.getElementById("testEmailResult").style.display = "none";
   document.getElementById("testEmailName").value = "";
-  document.getElementById("viewAsResult").style.display = "none";
-  document.getElementById("viewAsEmailInput").value = "";
   adminBackdrop.classList.add("open");
   adminSheet.classList.add("open");
   loadInviteList();
@@ -2560,54 +2558,196 @@ async function loadInviteList(){
   }
 }
 
-document.getElementById("viewAsBtn").onclick = async () => {
-  const input = document.getElementById("viewAsEmailInput");
-  const email = input.value.trim().toLowerCase();
-  const resultEl = document.getElementById("viewAsResult");
-  if(!email || !email.includes("@")){
-    showToast("Enter a valid email first");
-    input.focus();
-    return;
-  }
-  const btn = document.getElementById("viewAsBtn");
-  btn.disabled = true;
-  btn.textContent = "Looking up…";
-  resultEl.style.display = "none";
+// --- Users screen (roster + read-only details + full impersonation) ----
+const usersBackdrop = document.getElementById("usersBackdrop");
+const usersSheet = document.getElementById("usersSheet");
+function closeUsers(){
+  usersBackdrop.classList.remove("open");
+  usersSheet.classList.remove("open");
+}
+document.getElementById("openUsersBtn").onclick = () => {
+  if(!isAdmin) return;
+  usersBackdrop.classList.add("open");
+  usersSheet.classList.add("open");
+  loadUsersList();
+};
+document.getElementById("btnUsersClose").onclick = closeUsers;
+usersBackdrop.onclick = closeUsers;
+enableSwipeToDismiss(usersSheet, closeUsers);
+
+// A relative "last active" label built off last_sign_in_at. This is a
+// login timestamp, not real presence — worded as "active" rather than
+// "online" so it doesn't overclaim a live status we don't actually track.
+function relativeActiveLabel(iso){
+  if(!iso) return "Never signed in";
+  const then = new Date(iso).getTime();
+  const diffMs = Date.now() - then;
+  const mins = Math.floor(diffMs / 60000);
+  if(mins < 1) return "Active just now";
+  if(mins < 60) return `Active ${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if(hours < 24) return `Active ${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if(days < 30) return `Active ${days}d ago`;
+  return `Active ${formatDate(iso.slice(0,10))}`;
+}
+function fullDateTime(iso){
+  if(!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, {
+    year:"numeric", month:"short", day:"numeric", hour:"numeric", minute:"2-digit"
+  });
+}
+
+async function loadUsersList(){
+  const wrap = document.getElementById("usersListWrap");
+  wrap.innerHTML = `<div class="artist">Loading…</div>`;
   try{
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-view-as`, {
-      method: "POST",
-      headers: HEADERS,
-      body: JSON.stringify({ target_email: email })
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-list-users`, {
+      method: "POST", headers: HEADERS
     });
     const data = await res.json();
     if(!res.ok){
-      resultEl.innerHTML = `<div class="artist">${escapeHtml(data.error || "Lookup failed")}</div>`;
-      resultEl.style.display = "block";
+      wrap.innerHTML = `<div class="artist">${escapeHtml(data.error || "Couldn't load users")}</div>`;
+      return;
+    }
+    const users = data.users || [];
+    if(!users.length){
+      wrap.innerHTML = `<div class="artist">No users yet.</div>`;
+      return;
+    }
+    wrap.innerHTML = users.map(u => `
+      <div class="user-row" data-email="${u.email.replace(/"/g,'&quot;')}">
+        <div class="user-row-top">
+          <span class="user-row-email">${escapeHtml(u.email)}${u.is_admin ? '<span class="user-row-tag">admin</span>' : ""}${u.email === currentUserEmail ? '<span class="user-row-tag">you</span>' : ""}</span>
+        </div>
+        <div class="user-row-meta">
+          ${relativeActiveLabel(u.last_sign_in_at)} — last: ${fullDateTime(u.last_sign_in_at)}<br>
+          Joined ${fullDateTime(u.created_at)}${u.email_confirmed ? "" : " · unconfirmed"}
+        </div>
+        <div class="user-row-actions">
+          <button class="details-btn" data-email="${u.email.replace(/"/g,'&quot;')}">Details</button>
+          ${u.email === currentUserEmail ? "" : `<button class="impersonate-btn" data-email="${u.email.replace(/"/g,'&quot;')}">Impersonate</button>`}
+        </div>
+        <div class="user-row-detail" style="display:none; margin-top:8px;"></div>
+      </div>
+    `).join("");
+
+    wrap.querySelectorAll(".details-btn").forEach(btn => {
+      btn.onclick = () => toggleUserDetails(btn);
+    });
+    wrap.querySelectorAll(".impersonate-btn").forEach(btn => {
+      btn.onclick = () => startImpersonation(btn.dataset.email);
+    });
+  }catch(e){
+    wrap.innerHTML = `<div class="artist">Couldn't load users — check your connection and try again.</div>`;
+  }
+}
+
+async function toggleUserDetails(btn){
+  const row = btn.closest(".user-row");
+  const detailEl = row.querySelector(".user-row-detail");
+  if(detailEl.style.display === "block"){
+    detailEl.style.display = "none";
+    return;
+  }
+  detailEl.style.display = "block";
+  detailEl.innerHTML = `<div class="artist">Loading…</div>`;
+  try{
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-view-as`, {
+      method: "POST", headers: HEADERS,
+      body: JSON.stringify({ target_email: btn.dataset.email })
+    });
+    const data = await res.json();
+    if(!res.ok){
+      detailEl.innerHTML = `<div class="artist">${escapeHtml(data.error || "Lookup failed")}</div>`;
       return;
     }
     const statusLines = Object.entries(data.songs_by_status || {})
       .map(([status, count]) => `${escapeHtml(status)}: ${count}`).join(" · ") || "none yet";
-    resultEl.innerHTML = `
-      <div class="invite-row" style="flex-direction:column; align-items:flex-start; gap:4px;">
-        <div class="invite-row-email">${escapeHtml(data.email)}${data.is_admin ? '<span class="invite-row-tag">admin</span>' : ""}</div>
-        <div class="artist" style="font-family:'IBM Plex Mono',monospace; font-size:11px;">
-          Range: ${escapeHtml(data.range_mode || "not set")} · ${escapeHtml(data.comfort_range)}<br>
-          Songs (${data.total_songs}): ${statusLines}<br>
-          Setlists: ${data.setlist_count}<br>
-          Joined: ${data.created_at ? formatDate(data.created_at.slice(0,10)) : "—"}<br>
-          Last sign-in: ${data.last_sign_in_at ? formatDate(data.last_sign_in_at.slice(0,10)) : "never"}<br>
-          Email confirmed: ${data.email_confirmed ? "yes" : "no"}
-        </div>
+    detailEl.innerHTML = `
+      <div class="artist" style="font-family:'IBM Plex Mono',monospace; font-size:11px;">
+        Range: ${escapeHtml(data.range_mode || "not set")} · ${escapeHtml(data.comfort_range)}<br>
+        Songs (${data.total_songs}): ${statusLines}<br>
+        Setlists: ${data.setlist_count}
       </div>`;
-    resultEl.style.display = "block";
   }catch(e){
-    resultEl.innerHTML = `<div class="artist">Lookup failed — check your connection and try again.</div>`;
-    resultEl.style.display = "block";
-  }finally{
-    btn.disabled = false;
-    btn.textContent = "Look up";
+    detailEl.innerHTML = `<div class="artist">Lookup failed.</div>`;
   }
-};
+}
+
+// Full impersonation: mint a real session for the target user via the
+// admin-impersonate Edge Function (Supabase's own generateLink+verifyOtp
+// mechanism — no service-role token ever reaches this client), stash the
+// admin's own session so "Exit" can restore it, then reload so the whole
+// app re-initializes as that user.
+async function startImpersonation(targetEmail){
+  if(!confirm(`Sign in as ${targetEmail}? You can exit back to your own account any time.`)) return;
+  try{
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-impersonate`, {
+      method: "POST", headers: HEADERS,
+      body: JSON.stringify({ target_email: targetEmail })
+    });
+    const data = await res.json();
+    if(!res.ok){
+      showToast(data.error || "Couldn't impersonate that user");
+      return;
+    }
+
+    const { data: { session: adminSession } } = await authClient.auth.getSession();
+    if(!adminSession){
+      showToast("Lost your session — try signing in again");
+      return;
+    }
+    sessionStorage.setItem("ss_impersonate_return", JSON.stringify({
+      access_token: adminSession.access_token,
+      refresh_token: adminSession.refresh_token,
+      admin_email: adminSession.user.email
+    }));
+
+    const { error: verifyErr } = await authClient.auth.verifyOtp({
+      type: "magiclink",
+      email: data.email,
+      token_hash: data.token_hash
+    });
+    if(verifyErr){
+      sessionStorage.removeItem("ss_impersonate_return");
+      showToast("Couldn't switch session: " + verifyErr.message);
+      return;
+    }
+
+    try{ localStorage.removeItem("ss_view"); }catch(e){ /* ignore */ }
+    window.location.reload();
+  }catch(e){
+    showToast("Impersonation failed — check your connection and try again");
+  }
+}
+
+function initImpersonationBanner(){
+  let backup = null;
+  try{ backup = JSON.parse(sessionStorage.getItem("ss_impersonate_return") || "null"); }catch(e){ /* ignore */ }
+  if(!backup) return;
+
+  const banner = document.getElementById("impersonateBanner");
+  const textEl = document.getElementById("impersonateBannerText");
+  textEl.textContent = `Viewing as ${currentUserEmail || "…"} — signed in via ${backup.admin_email}`;
+  banner.style.display = "flex";
+
+  document.getElementById("exitImpersonateBtn").onclick = async () => {
+    const { error } = await authClient.auth.setSession({
+      access_token: backup.access_token,
+      refresh_token: backup.refresh_token
+    });
+    sessionStorage.removeItem("ss_impersonate_return");
+    if(error){
+      showToast("Couldn't restore your session — sign in again");
+      window.location.reload();
+      return;
+    }
+    try{ localStorage.removeItem("ss_view"); }catch(e){ /* ignore */ }
+    window.location.reload();
+  };
+}
 
 document.getElementById("addInviteBtn").onclick = async () => {
   const input = document.getElementById("inviteEmailInput");
@@ -3074,6 +3214,7 @@ async function onSignedIn(session){
   const emailEl = document.getElementById("accountEmail");
   if(emailEl) emailEl.textContent = session.user.email;
   currentUserEmail = session.user.email;
+  initImpersonationBanner();
 
   await loadProfileRange(session.user.id);
 

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>Caterwauler</title>
-<link rel="stylesheet" href="styles.css?v=40">
+<link rel="stylesheet" href="styles.css?v=41">
 </head>
 <body>
 
@@ -47,6 +47,11 @@
       <button class="btn-cancel" id="authUseDifferentBtn" style="flex:1;">Use a different email</button>
     </div>
   </div>
+</div>
+
+<div class="impersonate-banner" id="impersonateBanner" style="display:none;">
+  <span id="impersonateBannerText"></span>
+  <button id="exitImpersonateBtn">Exit</button>
 </div>
 
 <div class="top-bar">
@@ -379,16 +384,13 @@
     </div>
   </div>
 
-  <div class="settings-section-label">View as (debug)</div>
+  <div class="settings-section-label">Users</div>
   <div class="field">
     <div class="artist" style="margin-bottom:10px;">
-      Read-only lookup for a tester's account — vocal range, song counts,
-      setlist count, last sign-in. Doesn't sign you in as them or let you
-      change anything on their behalf.
+      Full roster, last activity, and the ability to sign in as any
+      tester for support/debugging.
     </div>
-    <input type="email" id="viewAsEmailInput" placeholder="tester@example.com" style="width:100%; margin-bottom:8px;">
-    <button class="check-missing-btn" id="viewAsBtn">Look up</button>
-    <div id="viewAsResult" style="display:none; margin-top:10px;"></div>
+    <button class="check-missing-btn" id="openUsersBtn">Manage users</button>
   </div>
 
   <div class="settings-section-label">Invites</div>
@@ -406,6 +408,21 @@
 
   <div class="sheet-actions">
     <button class="btn-cancel" id="btnAdminClose" style="flex:1;">Done</button>
+  </div>
+</div>
+
+<div class="sheet-backdrop" id="usersBackdrop"></div>
+<div class="sheet sheet-large" id="usersSheet">
+  <h2>Users</h2>
+  <div class="artist" style="margin-bottom:12px;">
+    Tap "Impersonate" to sign in as that account exactly as they'd see it
+    — you can always exit back to your own account from the banner at the
+    top. Nothing here bypasses their normal data access; it's a real
+    session, not a peek.
+  </div>
+  <div id="usersListWrap"><div class="artist">Loading…</div></div>
+  <div class="sheet-actions">
+    <button class="btn-cancel" id="btnUsersClose" style="flex:1;">Done</button>
   </div>
 </div>
 
@@ -520,6 +537,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=52"></script>
+<script src="app.js?v=53"></script>
 </body>
 </html>

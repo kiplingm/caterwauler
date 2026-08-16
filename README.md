@@ -84,10 +84,15 @@ after a deploy, silently undoing whatever just shipped.
 
 ## To do
 - ~~Create test users and support admin impersonation of them~~ — done
-  (build 51+): read-only "View as" lookup in Admin, backed by the
-  `admin-view-as` Edge Function. Deliberately not a session takeover —
-  admin sees a summary (range, song counts, setlists, last sign-in) for
-  one target user_id at a time, never mints a token or acts as them.
+  (build 53): dedicated Users screen in Admin (`usersSheet`) — full
+  roster with last-active time via `admin-list-users`, expandable
+  read-only details via `admin-view-as`, and real full impersonation via
+  `admin-impersonate`. Impersonation works by minting a genuine session
+  for the target user through Supabase's own `generateLink` +
+  `verifyOtp` (no service-role key ever reaches the client), so once
+  switched, everything the admin sees is governed by the target's own
+  RLS — not a bypass. The admin's own session is stashed in
+  `sessionStorage` before switching so the "Exit" banner can restore it.
 - **Manual step needed**: add `https://kiplingm.github.io/caterwauler/`
   to Supabase Dashboard → Authentication → URL Configuration → Redirect
   URLs (repo/Pages URL renamed from setlist-sherpa in build 51). Until
