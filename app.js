@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "53";
+const BUILD_VERSION = "54";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -2707,7 +2707,6 @@ async function startImpersonation(targetEmail){
 
     const { error: verifyErr } = await authClient.auth.verifyOtp({
       type: "magiclink",
-      email: data.email,
       token_hash: data.token_hash
     });
     if(verifyErr){
