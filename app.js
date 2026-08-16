@@ -2525,6 +2525,8 @@ document.getElementById("adminBtn").onclick = () => {
   if(!isAdmin) return;
   document.getElementById("testEmailResult").style.display = "none";
   document.getElementById("testEmailName").value = "";
+  document.getElementById("viewAsResult").style.display = "none";
+  document.getElementById("viewAsEmailInput").value = "";
   adminBackdrop.classList.add("open");
   adminSheet.classList.add("open");
   loadInviteList();
@@ -2557,6 +2559,55 @@ async function loadInviteList(){
     wrap.innerHTML = `<div class="artist">Couldn't load the invite list. Try closing and reopening Admin.</div>`;
   }
 }
+
+document.getElementById("viewAsBtn").onclick = async () => {
+  const input = document.getElementById("viewAsEmailInput");
+  const email = input.value.trim().toLowerCase();
+  const resultEl = document.getElementById("viewAsResult");
+  if(!email || !email.includes("@")){
+    showToast("Enter a valid email first");
+    input.focus();
+    return;
+  }
+  const btn = document.getElementById("viewAsBtn");
+  btn.disabled = true;
+  btn.textContent = "Looking up…";
+  resultEl.style.display = "none";
+  try{
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-view-as`, {
+      method: "POST",
+      headers: HEADERS,
+      body: JSON.stringify({ target_email: email })
+    });
+    const data = await res.json();
+    if(!res.ok){
+      resultEl.innerHTML = `<div class="artist">${escapeHtml(data.error || "Lookup failed")}</div>`;
+      resultEl.style.display = "block";
+      return;
+    }
+    const statusLines = Object.entries(data.songs_by_status || {})
+      .map(([status, count]) => `${escapeHtml(status)}: ${count}`).join(" · ") || "none yet";
+    resultEl.innerHTML = `
+      <div class="invite-row" style="flex-direction:column; align-items:flex-start; gap:4px;">
+        <div class="invite-row-email">${escapeHtml(data.email)}${data.is_admin ? '<span class="invite-row-tag">admin</span>' : ""}</div>
+        <div class="artist" style="font-family:'IBM Plex Mono',monospace; font-size:11px;">
+          Range: ${escapeHtml(data.range_mode || "not set")} · ${escapeHtml(data.comfort_range)}<br>
+          Songs (${data.total_songs}): ${statusLines}<br>
+          Setlists: ${data.setlist_count}<br>
+          Joined: ${data.created_at ? formatDate(data.created_at.slice(0,10)) : "—"}<br>
+          Last sign-in: ${data.last_sign_in_at ? formatDate(data.last_sign_in_at.slice(0,10)) : "never"}<br>
+          Email confirmed: ${data.email_confirmed ? "yes" : "no"}
+        </div>
+      </div>`;
+    resultEl.style.display = "block";
+  }catch(e){
+    resultEl.innerHTML = `<div class="artist">Lookup failed — check your connection and try again.</div>`;
+    resultEl.style.display = "block";
+  }finally{
+    btn.disabled = false;
+    btn.textContent = "Look up";
+  }
+};
 
 document.getElementById("addInviteBtn").onclick = async () => {
   const input = document.getElementById("inviteEmailInput");
