@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "57";
+const BUILD_VERSION = "58";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -2477,9 +2477,12 @@ document.getElementById("settingsBtn").onclick = () => {
   renderThemeGrid();
   document.getElementById("missingResults").innerHTML = "";
   document.getElementById("inviteResult").style.display = "none";
+  document.getElementById("findUserResults").innerHTML = "";
+  document.getElementById("findUserInput").value = "";
   renderRangeModeUI(currentRangeMode);
   settingsBackdrop.classList.add("open");
   settingsSheet.classList.add("open");
+  loadFriendsList();
 };
 
 document.getElementById("genInviteBtn").onclick = async () => {
@@ -2997,9 +3000,10 @@ document.getElementById("rangeModeManualBtn").onclick = async () => {
 // numbers, hyphens only, 3-20 chars. The DB enforces uniqueness via a
 // unique index on lower(username) — this just gives a friendly message
 // instead of a raw Postgres constraint error when that fires.
-// Preview lookup for the eventual friending system — calls the
-// search_users() RPC, which only ever returns id+username (never email
-// or profile data), and only for authenticated callers.
+// search_users() returns id+username+relationship (never email or other
+// profile data) so results can show the right action per person:
+// "Add" for strangers, "Requested" for outgoing, "Respond" for someone
+// who already requested you, "Friends" once accepted.
 document.getElementById("findUserBtn").onclick = async () => {
   const input = document.getElementById("findUserInput");
   const resultsEl = document.getElementById("findUserResults");
@@ -3024,9 +3028,22 @@ document.getElementById("findUserBtn").onclick = async () => {
       resultsEl.innerHTML = `<div class="artist">No matches.</div>`;
       return;
     }
-    resultsEl.innerHTML = matches.map(m => `
-      <div class="invite-row"><span class="invite-row-email">@${escapeHtml(m.username)}</span></div>
-    `).join("");
+    resultsEl.innerHTML = matches.map(m => {
+      let actionHtml;
+      if(m.relationship === "friends"){
+        actionHtml = `<span class="invite-row-tag">Friends</span>`;
+      }else if(m.relationship === "pending_outgoing"){
+        actionHtml = `<span class="invite-row-tag">Requested</span>`;
+      }else if(m.relationship === "pending_incoming"){
+        actionHtml = `<button class="details-btn respond-btn" data-username="${m.username.replace(/"/g,'&quot;')}">Respond below</button>`;
+      }else{
+        actionHtml = `<button class="details-btn add-friend-btn" data-username="${m.username.replace(/"/g,'&quot;')}">Add</button>`;
+      }
+      return `<div class="invite-row"><span class="invite-row-email">@${escapeHtml(m.username)}</span>${actionHtml}</div>`;
+    }).join("");
+    resultsEl.querySelectorAll(".add-friend-btn").forEach(b => {
+      b.onclick = () => sendFriendRequest(b.dataset.username, b);
+    });
   }catch(e){
     resultsEl.innerHTML = `<div class="artist">Search failed — try again.</div>`;
   }finally{
@@ -3034,6 +3051,108 @@ document.getElementById("findUserBtn").onclick = async () => {
     btn.textContent = "Search";
   }
 };
+
+async function sendFriendRequest(username, btn){
+  if(btn){ btn.disabled = true; btn.textContent = "…"; }
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/send_friend_request`, {
+      method: "POST",
+      headers: HEADERS,
+      body: JSON.stringify({ target_username: username })
+    });
+    const data = await res.json().catch(() => null);
+    if(!res.ok){
+      showToast((data && data.message) || "Couldn't send that request");
+      if(btn){ btn.disabled = false; btn.textContent = "Add"; }
+      return;
+    }
+    const outcomes = {
+      requested: "Friend request sent",
+      accepted: `You and @${username} are now friends`,
+      already_pending: "Request already pending",
+      already_friends: "You're already friends"
+    };
+    showToast(outcomes[data] || "Done");
+    loadFriendsList();
+    document.getElementById("findUserBtn").click();
+  }catch(e){
+    showToast("Couldn't send that request — check your connection");
+    if(btn){ btn.disabled = false; btn.textContent = "Add"; }
+  }
+}
+
+async function loadFriendsList(){
+  const wrap = document.getElementById("friendsListWrap");
+  wrap.innerHTML = `<div class="artist">Loading…</div>`;
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/list_friendships`, {
+      method: "POST", headers: HEADERS
+    });
+    if(!res.ok) throw new Error("Failed to load");
+    const rows = await res.json();
+    if(!rows.length){
+      wrap.innerHTML = `<div class="artist">No friends or requests yet — search above to add someone.</div>`;
+      return;
+    }
+    const incoming = rows.filter(r => r.status === "pending" && r.direction === "incoming");
+    const outgoing = rows.filter(r => r.status === "pending" && r.direction === "outgoing");
+    const friends = rows.filter(r => r.status === "accepted");
+
+    let html = "";
+    if(incoming.length){
+      html += `<div class="artist" style="margin:8px 0 4px; font-weight:700;">Requests for you</div>`;
+      html += incoming.map(r => `
+        <div class="invite-row">
+          <span class="invite-row-email">@${escapeHtml(r.other_username)}</span>
+          <span style="display:flex; gap:6px;">
+            <button class="invite-row-remove accept-btn" data-id="${r.friendship_id}" style="color:var(--gold);">Accept</button>
+            <button class="invite-row-remove decline-btn" data-id="${r.friendship_id}">Decline</button>
+          </span>
+        </div>`).join("");
+    }
+    if(outgoing.length){
+      html += `<div class="artist" style="margin:8px 0 4px; font-weight:700;">Sent, waiting</div>`;
+      html += outgoing.map(r => `
+        <div class="invite-row">
+          <span class="invite-row-email">@${escapeHtml(r.other_username)}</span>
+          <button class="invite-row-remove cancel-btn" data-id="${r.friendship_id}">Cancel</button>
+        </div>`).join("");
+    }
+    if(friends.length){
+      html += `<div class="artist" style="margin:8px 0 4px; font-weight:700;">Friends</div>`;
+      html += friends.map(r => `
+        <div class="invite-row">
+          <span class="invite-row-email">@${escapeHtml(r.other_username)}</span>
+          <button class="invite-row-remove unfriend-btn" data-id="${r.friendship_id}">Remove</button>
+        </div>`).join("");
+    }
+    wrap.innerHTML = html || `<div class="artist">No friends or requests yet.</div>`;
+
+    wrap.querySelectorAll(".accept-btn").forEach(b => b.onclick = () => respondFriendship(b.dataset.id, "accept"));
+    wrap.querySelectorAll(".decline-btn").forEach(b => b.onclick = () => respondFriendship(b.dataset.id, "decline"));
+    wrap.querySelectorAll(".cancel-btn, .unfriend-btn").forEach(b => b.onclick = () => respondFriendship(b.dataset.id, "remove"));
+  }catch(e){
+    wrap.innerHTML = `<div class="artist">Couldn't load friends — try reopening Settings.</div>`;
+  }
+}
+
+async function respondFriendship(id, action){
+  const endpoint = action === "accept" ? "accept_friend_request"
+    : action === "decline" ? "decline_friend_request"
+    : "remove_friendship";
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${endpoint}`, {
+      method: "POST",
+      headers: HEADERS,
+      body: JSON.stringify({ request_id: id })
+    });
+    if(!res.ok) throw new Error("Failed");
+    showToast(action === "accept" ? "Friend added" : action === "decline" ? "Declined" : "Removed");
+    loadFriendsList();
+  }catch(e){
+    showToast("Couldn't update that — try again");
+  }
+}
 
 document.getElementById("saveUsernameBtn").onclick = async () => {
   const input = document.getElementById("usernameInput");

@@ -83,17 +83,25 @@ after a deploy, silently undoing whatever just shipped.
   just won't fire for those specific songs.
 
 ## To do
-- **Friending system** (build 57 added the lookup step): `search_users(search_query)`
-  RPC is live — returns only `id`+`username` for matches (2+ chars,
-  `ilike`, excludes self, capped at 20), callable by any authenticated
-  user via `security definer` since normal RLS is "select own row only."
-  A "Find people (preview)" search box in Settings exercises it end to
-  end. Commented-out `NOT EXISTS` clause in the function is ready to
-  uncomment once a `friendships` table exists, to exclude people already
-  friended/pending from results. Still needed: the `friendships` table
-  itself (requester_id, addressee_id, status), request/accept/decline
-  RPCs or REST calls, and the actual UI to send a request from a search
-  result (current preview is read-only lookup, no request button yet).
+- **Friending system** — functionally complete as of build 58. `friendships`
+  table (requester_id, addressee_id, status: pending/accepted/declined,
+  unique index on the unordered pair so requests can't be duplicated or
+  crossed). All writes go through security-definer RPCs, not direct REST
+  — the table itself has only a SELECT policy, so a raw REST call can't
+  mutate it: `send_friend_request(username)` (creates a request, or
+  auto-accepts if the other person already requested you, or revives a
+  declined one), `accept_friend_request` / `decline_friend_request` /
+  `remove_friendship` (also doubles as cancel-outgoing and unfriend),
+  `list_friendships()` (joined view with the other person's username,
+  since `profiles` RLS wouldn't otherwise let you read it). Settings →
+  Friends has the full UI: search with relationship-aware buttons
+  (Add / Requested / Friends), plus incoming requests, sent requests,
+  and current friends lists.
+  - Not built: notifications when someone sends/accepts a request (no
+    push infra yet — would need to check on next app open).
+  - Not built: any actual *use* of friendships elsewhere in the app
+    (e.g. seeing a friend's setlist, comparing songbooks) — this is
+    just the social graph, nothing consumes it yet.
 - ~~Create test users and support admin impersonation of them~~ — done
   (build 53): dedicated Users screen in Admin (`usersSheet`) — full
   roster with last-active time via `admin-list-users`, expandable
