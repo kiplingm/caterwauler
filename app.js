@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "49";
+const BUILD_VERSION = "50";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -2204,7 +2204,7 @@ document.getElementById("btnDeleteSetlist").onclick = async () => {
 async function fetchSetlistSongs(setlistId){
   try{
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/setlist_songs?setlist_id=eq.${setlistId}&select=id,song_id,position,songs(title,artist)&order=position.asc`,
+      `${SUPABASE_URL}/rest/v1/setlist_songs?setlist_id=eq.${setlistId}&select=id,song_id,position,songs(title,artist,status,low_note,high_note,in_karafun)&order=position.asc`,
       {headers: HEADERS}
     );
     if(!res.ok) throw new Error("Fetch failed");
@@ -2213,7 +2213,11 @@ async function fetchSetlistSongs(setlistId){
       id: r.id,
       song_id: r.song_id,
       title: (r.songs && r.songs.title) || "(song removed from songbook)",
-      artist: (r.songs && r.songs.artist) || ""
+      artist: (r.songs && r.songs.artist) || "",
+      status: r.songs && r.songs.status,
+      low_note: r.songs && r.songs.low_note,
+      high_note: r.songs && r.songs.high_note,
+      in_karafun: r.songs && r.songs.in_karafun
     }));
   }catch(err){
     currentSetlistSongs = [];
@@ -2228,17 +2232,31 @@ function renderSetlistSongs(){
     listEl.innerHTML = `<div class="empty" style="padding:16px 4px;">No songs yet — search below to add some.</div>`;
     return;
   }
+  // Reuses the same building blocks as a Songbook card (range strip,
+  // .title/.artist typography, status pill, KaraFun badge, streaming
+  // links) so a song looks like the same object whether you're viewing
+  // it in the Songbook or inside a setlist — only the move/remove
+  // controls are unique to this view.
   listEl.innerHTML = currentSetlistSongs.map((s, i) => `
-    <div class="sl-song-row" data-id="${s.id}">
-      <div class="sl-song-num">${i+1}</div>
-      <div class="sl-song-info">
-        <div class="sl-song-title">${escapeHtml(s.title)}</div>
-        <div class="sl-song-artist">${escapeHtml(s.artist)}</div>
-      </div>
-      <div class="sl-song-actions">
-        <button class="sl-move-btn" data-id="${s.id}" data-dir="up" ${i===0 ? "disabled" : ""} aria-label="Move up">↑</button>
-        <button class="sl-move-btn" data-id="${s.id}" data-dir="down" ${i===currentSetlistSongs.length-1 ? "disabled" : ""} aria-label="Move down">↓</button>
-        <button class="sl-remove-btn" data-id="${s.id}" aria-label="Remove">✕</button>
+    <div class="card sl-song-row" data-id="${s.id}">
+      ${renderCardStrip(s.low_note, s.high_note)}
+      <div class="card-content sl-song-content">
+        <div class="sl-song-top">
+          <div class="sl-song-num">${i+1}</div>
+          <div class="sl-song-main">
+            <div class="title">${escapeHtml(s.title)}${s.in_karafun ? `<span class="karafun-badge" title="In the KaraFun catalog">K</span>` : ""}</div>
+            <div class="artist">${escapeHtml(s.artist)}</div>
+          </div>
+          ${s.status ? `<div class="status-pill status-${s.status}"><span class="status-icon">${STATUS_ICONS[s.status]||""}</span> ${s.status}</div>` : ""}
+        </div>
+        <div class="sl-song-bottom">
+          ${s.title && s.artist ? externalLinksHtml(s.title, s.artist) : "<span></span>"}
+          <div class="sl-song-actions">
+            <button class="sl-move-btn" data-id="${s.id}" data-dir="up" ${i===0 ? "disabled" : ""} aria-label="Move up">↑</button>
+            <button class="sl-move-btn" data-id="${s.id}" data-dir="down" ${i===currentSetlistSongs.length-1 ? "disabled" : ""} aria-label="Move down">↓</button>
+            <button class="sl-remove-btn" data-id="${s.id}" aria-label="Remove">✕</button>
+          </div>
+        </div>
       </div>
     </div>
   `).join("");
