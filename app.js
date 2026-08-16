@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "50";
+const BUILD_VERSION = "51";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -2527,7 +2527,82 @@ document.getElementById("adminBtn").onclick = () => {
   document.getElementById("testEmailName").value = "";
   adminBackdrop.classList.add("open");
   adminSheet.classList.add("open");
+  loadInviteList();
 };
+
+// Invite/allowlist management — allowed_emails is RLS-gated to admins only,
+// so a non-admin hitting these endpoints just gets an empty result / denied
+// write, but the button is also hidden behind isAdmin as belt-and-suspenders.
+async function loadInviteList(){
+  const wrap = document.getElementById("inviteListWrap");
+  wrap.innerHTML = `<div class="artist">Loading…</div>`;
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/allowed_emails?select=*&order=created_at.asc`, {headers: HEADERS});
+    if(!res.ok) throw new Error("Failed to load invite list");
+    const rows = await res.json();
+    if(!rows.length){
+      wrap.innerHTML = `<div class="artist">No one on the invite list yet.</div>`;
+      return;
+    }
+    wrap.innerHTML = rows.map(r => `
+      <div class="invite-row" data-email="${r.email.replace(/"/g,'&quot;')}">
+        <span class="invite-row-email">${r.email}${r.is_root ? '<span class="invite-row-tag">root</span>' : ''}</span>
+        <button class="invite-row-remove" data-email="${r.email.replace(/"/g,'&quot;')}">Remove</button>
+      </div>
+    `).join("");
+    wrap.querySelectorAll(".invite-row-remove").forEach(btn => {
+      btn.onclick = () => removeInvite(btn.dataset.email);
+    });
+  }catch(e){
+    wrap.innerHTML = `<div class="artist">Couldn't load the invite list. Try closing and reopening Admin.</div>`;
+  }
+}
+
+document.getElementById("addInviteBtn").onclick = async () => {
+  const input = document.getElementById("inviteEmailInput");
+  const email = input.value.trim().toLowerCase();
+  if(!email || !email.includes("@")){
+    showToast("Enter a valid email first");
+    input.focus();
+    return;
+  }
+  const btn = document.getElementById("addInviteBtn");
+  btn.disabled = true;
+  btn.textContent = "Adding…";
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/allowed_emails`, {
+      method: "POST",
+      headers: {...HEADERS, "Prefer":"return=minimal,resolution=merge-duplicates"},
+      body: JSON.stringify({ email })
+    });
+    if(!res.ok){
+      const body = await res.text();
+      throw new Error(body || "Insert failed");
+    }
+    input.value = "";
+    showToast("Added — they can now sign up");
+    await loadInviteList();
+  }catch(e){
+    showToast("Couldn't add that email");
+  }finally{
+    btn.disabled = false;
+    btn.textContent = "Add to invite list";
+  }
+};
+
+async function removeInvite(email){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/allowed_emails?email=eq.${encodeURIComponent(email)}`, {
+      method: "DELETE",
+      headers: HEADERS
+    });
+    if(!res.ok) throw new Error("Delete failed");
+    showToast("Removed from invite list");
+    await loadInviteList();
+  }catch(e){
+    showToast("Couldn't remove that email");
+  }
+}
 document.getElementById("btnAdminClose").onclick = closeAdmin;
 adminBackdrop.onclick = closeAdmin;
 enableSwipeToDismiss(adminSheet, closeAdmin);
@@ -2672,7 +2747,7 @@ document.getElementById("genTestEmailBtn").onclick = async () => {
   btn.textContent = "Generate & send login email";
 
   if(error){
-    showToast(`Send failed: ${error.message}`);
+    showToast(`Send failed: ${friendlyAuthError(error)}`);
     return;
   }
 
@@ -2774,7 +2849,7 @@ document.getElementById("exportDataBtn").onclick = async () => {
 
     const exportPayload = {
       exported_at: new Date().toISOString(),
-      source: "kiplingm/setlist-sherpa",
+      source: "kiplingm/caterwauler",
       songs: songsData,
       performances: perfData,
       song_ranges: rangesData
@@ -3018,6 +3093,33 @@ async function loadProfileRange(userId){
   }
 }
 
+// Supabase auth errors are technical/inconsistent by default (Postgres
+// exception text, rate-limit codes, etc.) — this maps the common ones a
+// non-technical tester might actually hit into plain language. Anything
+// unrecognized falls through to the raw message rather than being hidden,
+// so a genuinely new failure mode is still visible for debugging.
+function friendlyAuthError(error){
+  const msg = (error && error.message) || "";
+  const lower = msg.toLowerCase();
+
+  if(lower.includes("invite-only")){
+    return "This app is invite-only right now — ask whoever shared it with you to add your email, then try again.";
+  }
+  if(lower.includes("rate limit") || lower.includes("too many requests")){
+    return "Too many tries in a row — wait a minute before requesting another code.";
+  }
+  if(lower.includes("expired") || lower.includes("invalid") && lower.includes("token")){
+    return "That code is wrong or expired. Double-check the 6 digits, or request a new one.";
+  }
+  if(lower.includes("invalid") && lower.includes("email")){
+    return "That doesn't look like a valid email address.";
+  }
+  if(lower.includes("failed to fetch") || lower.includes("networkerror")){
+    return "Couldn't reach the server — check your internet connection and try again.";
+  }
+  return msg || "Something went wrong. Please try again.";
+}
+
 async function sendLoginEmail(email){
   const errEl = document.getElementById("authError");
   errEl.style.display = "none";
@@ -3035,7 +3137,7 @@ async function sendLoginEmail(email){
   btn.textContent = "Continue";
 
   if(error){
-    errEl.textContent = error.message;
+    errEl.textContent = friendlyAuthError(error);
     errEl.style.display = "block";
     return false;
   }
@@ -3088,7 +3190,7 @@ document.getElementById("authVerifyCodeBtn").onclick = async () => {
   btn.textContent = "Verify code";
 
   if(error){
-    codeErrEl.textContent = error.message;
+    codeErrEl.textContent = friendlyAuthError(error);
     codeErrEl.style.display = "block";
   }
   // On success, onAuthStateChange (registered below) picks up the new

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>Caterwauler</title>
-<link rel="stylesheet" href="styles.css?v=39">
+<link rel="stylesheet" href="styles.css?v=40">
 </head>
 <body>
 
@@ -379,6 +379,19 @@
     </div>
   </div>
 
+  <div class="settings-section-label">Invites</div>
+  <div class="field">
+    <div class="artist" style="margin-bottom:10px;">
+      The app is invite-only. Only emails on this list can create a brand
+      new account — existing signed-in users are unaffected. Your own
+      address is marked "root," so any <code>+tag</code> test variant of it
+      (like the generator above makes) is always allowed automatically.
+    </div>
+    <input type="email" id="inviteEmailInput" placeholder="friend@example.com" style="width:100%; margin-bottom:8px;">
+    <button class="check-missing-btn" id="addInviteBtn">Add to invite list</button>
+    <div id="inviteListWrap" style="margin-top:14px;"></div>
+  </div>
+
   <div class="sheet-actions">
     <button class="btn-cancel" id="btnAdminClose" style="flex:1;">Done</button>
   </div>
@@ -495,6 +508,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=50"></script>
+<script src="app.js?v=51"></script>
 </body>
 </html>
