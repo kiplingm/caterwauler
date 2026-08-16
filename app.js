@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "56";
+const BUILD_VERSION = "57";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -2997,6 +2997,44 @@ document.getElementById("rangeModeManualBtn").onclick = async () => {
 // numbers, hyphens only, 3-20 chars. The DB enforces uniqueness via a
 // unique index on lower(username) — this just gives a friendly message
 // instead of a raw Postgres constraint error when that fires.
+// Preview lookup for the eventual friending system — calls the
+// search_users() RPC, which only ever returns id+username (never email
+// or profile data), and only for authenticated callers.
+document.getElementById("findUserBtn").onclick = async () => {
+  const input = document.getElementById("findUserInput");
+  const resultsEl = document.getElementById("findUserResults");
+  const query = input.value.trim();
+  if(query.length < 2){
+    showToast("Type at least 2 characters");
+    return;
+  }
+  const btn = document.getElementById("findUserBtn");
+  btn.disabled = true;
+  btn.textContent = "Searching…";
+  resultsEl.innerHTML = "";
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/search_users`, {
+      method: "POST",
+      headers: HEADERS,
+      body: JSON.stringify({ search_query: query })
+    });
+    if(!res.ok) throw new Error("Search failed");
+    const matches = await res.json();
+    if(!matches.length){
+      resultsEl.innerHTML = `<div class="artist">No matches.</div>`;
+      return;
+    }
+    resultsEl.innerHTML = matches.map(m => `
+      <div class="invite-row"><span class="invite-row-email">@${escapeHtml(m.username)}</span></div>
+    `).join("");
+  }catch(e){
+    resultsEl.innerHTML = `<div class="artist">Search failed — try again.</div>`;
+  }finally{
+    btn.disabled = false;
+    btn.textContent = "Search";
+  }
+};
+
 document.getElementById("saveUsernameBtn").onclick = async () => {
   const input = document.getElementById("usernameInput");
   const errEl = document.getElementById("usernameError");

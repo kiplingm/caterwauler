@@ -313,6 +313,17 @@
     <div id="usernameError" class="artist" style="display:none; color:#e85d4f; margin-top:6px;"></div>
   </div>
 
+  <div class="field">
+    <label>FIND PEOPLE (PREVIEW)</label>
+    <div class="artist" style="margin-bottom:8px;">
+      Search by username — this is just the lookup for now. Sending and
+      accepting friend requests isn't built yet.
+    </div>
+    <input type="text" id="findUserInput" placeholder="Search usernames…" style="width:100%; margin-bottom:8px;">
+    <button class="check-missing-btn" id="findUserBtn">Search</button>
+    <div id="findUserResults" style="margin-top:10px;"></div>
+  </div>
+
   <div class="settings-section-label">Invite</div>
   <div class="field">
     <label>SHARE CATERWAULER</label>
@@ -551,6 +562,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=56"></script>
+<script src="app.js?v=57"></script>
 </body>
 </html>

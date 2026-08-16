@@ -83,16 +83,17 @@ after a deploy, silently undoing whatever just shipped.
   just won't fire for those specific songs.
 
 ## To do
-- **Friending system** (build 56 laid the groundwork): `profiles.username`
-  now exists — auto-generated from the email local-part on sign-up
-  (slugified, `-2`/`-3` suffix on collision), editable in Settings,
-  enforced unique via `profiles_username_unique_idx` on `lower(username)`.
-  Still needed for actual friending: `profiles` RLS is currently
-  "select own row only," so there's no way for one user to look up
-  another by username yet. Will need either a narrow public view
-  (`id`, `username` only — no email/range/etc.) or a `search_users`
-  RPC, plus a `friendships` table (requester_id, addressee_id, status)
-  and request/accept UI.
+- **Friending system** (build 57 added the lookup step): `search_users(search_query)`
+  RPC is live — returns only `id`+`username` for matches (2+ chars,
+  `ilike`, excludes self, capped at 20), callable by any authenticated
+  user via `security definer` since normal RLS is "select own row only."
+  A "Find people (preview)" search box in Settings exercises it end to
+  end. Commented-out `NOT EXISTS` clause in the function is ready to
+  uncomment once a `friendships` table exists, to exclude people already
+  friended/pending from results. Still needed: the `friendships` table
+  itself (requester_id, addressee_id, status), request/accept/decline
+  RPCs or REST calls, and the actual UI to send a request from a search
+  result (current preview is read-only lookup, no request button yet).
 - ~~Create test users and support admin impersonation of them~~ — done
   (build 53): dedicated Users screen in Admin (`usersSheet`) — full
   roster with last-active time via `admin-list-users`, expandable
