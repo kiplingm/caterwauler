@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "54";
+const BUILD_VERSION = "55";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -2487,7 +2487,7 @@ document.getElementById("genInviteBtn").onclick = async () => {
   // shortcut link) so a real invite always points at the plain app root,
   // never accidentally at someone else's per-person shortcut.
   const appUrl = window.location.origin + window.location.pathname;
-  const inviteText = `Hey! I've been using Caterwauler to manage my karaoke songbook — it tracks which songs I actually know, checks them against my real vocal range, and always has a good pick ready. Way better than winging it.\n\n${appUrl}\n\nJust enter your email — it creates your own private songbook automatically, no password needed.`;
+  const inviteText = `Hey! I've been using Caterwauler to manage my karaoke songbook — it tracks which songs I actually know, checks them against my real vocal range, and always has a good pick ready. Way better than winging it.\n\n${appUrl}\n\nJust enter your email — it creates your own private songbook automatically, no password needed. If the login email doesn't show up in a minute or two, check your spam/junk folder — it can land there the first time.`;
 
   const outputEl = document.getElementById("inviteOutput");
   const resultEl = document.getElementById("inviteResult");
