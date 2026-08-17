@@ -83,7 +83,7 @@ after a deploy, silently undoing whatever just shipped.
   just won't fire for those specific songs.
 
 ## To do
-- **Friending system** — functionally complete as of build 58. `friendships`
+- **Friending system** — functionally complete as of build 59. `friendships`
   table (requester_id, addressee_id, status: pending/accepted/declined,
   unique index on the unordered pair so requests can't be duplicated or
   crossed). All writes go through security-definer RPCs, not direct REST
@@ -93,15 +93,25 @@ after a deploy, silently undoing whatever just shipped.
   declined one), `accept_friend_request` / `decline_friend_request` /
   `remove_friendship` (also doubles as cancel-outgoing and unfriend),
   `list_friendships()` (joined view with the other person's username,
-  since `profiles` RLS wouldn't otherwise let you read it). Settings →
-  Friends has the full UI: search with relationship-aware buttons
-  (Add / Requested / Friends), plus incoming requests, sent requests,
-  and current friends lists.
-  - Not built: notifications when someone sends/accepts a request (no
-    push infra yet — would need to check on next app open).
-  - Not built: any actual *use* of friendships elsewhere in the app
-    (e.g. seeing a friend's setlist, comparing songbooks) — this is
-    just the social graph, nothing consumes it yet.
+  since `profiles` RLS wouldn't otherwise let you read it).
+  - **UI lives in its own top-level sheet** (`friendsSheet`, opened via
+    the new Friends icon in the marquee), not Settings — friending is a
+    mainstream social feature that'll keep growing, not app config, and
+    burying it in Settings was the wrong call from when it was first
+    built (build 58). Settings keeps just the Username field.
+  - **Badge** on the Friends icon shows the pending-incoming-request
+    count via `pending_friend_request_count()`, refreshed on sign-in and
+    after any action that changes it. It's a request counter, not a
+    push notification — still requires opening the app to see it.
+  - **First real use of the graph**: friends can view each other's
+    setlists (read-only) via `get_friend_setlists(friend_id)`, gated on
+    an accepted friendship existing. Setlists were picked over the full
+    songbook as the first share surface — a setlist is inherently
+    "here's what I'm bringing to a gig," already meant to be seen,
+    versus the songbook's more private in-progress status tracking.
+  - Not built: comparing songbooks, seeing a friend's vocal range, any
+    other cross-user feature — setlists were the one deliberate first
+    step, not a general "friends can see everything" opening.
 - ~~Create test users and support admin impersonation of them~~ — done
   (build 53): dedicated Users screen in Admin (`usersSheet`) — full
   roster with last-active time via `admin-list-users`, expandable

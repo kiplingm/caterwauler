@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0d0d0d">
-<link rel="stylesheet" href="styles.css?v=41">
+<link rel="stylesheet" href="styles.css?v=42">
 </head>
 <body>
 
@@ -75,6 +75,13 @@
         <div class="icon-btn-wrap" id="adminBtnWrap" style="display:none;">
           <button class="gear-btn" id="adminBtn" aria-label="Admin"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg></button>
           <span class="icon-btn-label">Admin</span>
+        </div>
+        <div class="icon-btn-wrap">
+          <button class="gear-btn" id="friendsBtn" aria-label="Friends">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+            <span class="badge-count" id="friendsBadge" style="display:none;"></span>
+          </button>
+          <span class="icon-btn-label">Friends</span>
         </div>
         <div class="icon-btn-wrap">
           <button class="gear-btn" id="settingsBtn" aria-label="Settings">⚙</button>
@@ -310,24 +317,12 @@
   <div class="field">
     <label>USERNAME</label>
     <div class="artist" style="margin-bottom:8px;">
-      Your handle — will be how friends find and add you once friending
-      is live. Lowercase letters, numbers, and hyphens only.
+      Your handle — how friends find and add you. Lowercase letters,
+      numbers, and hyphens only.
     </div>
     <input type="text" id="usernameInput" placeholder="username" style="width:100%; margin-bottom:8px;" maxlength="20">
     <button class="check-missing-btn" id="saveUsernameBtn">Save username</button>
     <div id="usernameError" class="artist" style="display:none; color:#e85d4f; margin-top:6px;"></div>
-  </div>
-
-  <div class="settings-section-label">Friends</div>
-  <div class="field">
-    <label>ADD BY USERNAME</label>
-    <input type="text" id="findUserInput" placeholder="Search usernames…" style="width:100%; margin-bottom:8px;">
-    <button class="check-missing-btn" id="findUserBtn">Search</button>
-    <div id="findUserResults" style="margin-top:10px;"></div>
-  </div>
-  <div class="field">
-    <label>REQUESTS &amp; FRIENDS</label>
-    <div id="friendsListWrap"><div class="artist">—</div></div>
   </div>
 
   <div class="settings-section-label">Invite</div>
@@ -457,6 +452,35 @@
   </div>
 </div>
 
+<div class="sheet-backdrop" id="friendsBackdrop"></div>
+<div class="sheet sheet-large" id="friendsSheet">
+  <h2>Friends</h2>
+
+  <div class="field">
+    <label>ADD BY USERNAME</label>
+    <input type="text" id="findUserInput" placeholder="Search usernames…" style="width:100%; margin-bottom:8px;">
+    <button class="check-missing-btn" id="findUserBtn">Search</button>
+    <div id="findUserResults" style="margin-top:10px;"></div>
+  </div>
+  <div class="field">
+    <label>REQUESTS &amp; FRIENDS</label>
+    <div id="friendsListWrap"><div class="artist">—</div></div>
+  </div>
+
+  <div class="sheet-actions">
+    <button class="btn-cancel" id="btnFriendsClose" style="flex:1;">Done</button>
+  </div>
+</div>
+
+<div class="sheet-backdrop" id="friendSetlistsBackdrop"></div>
+<div class="sheet sheet-large" id="friendSetlistsSheet">
+  <h2 id="friendSetlistsTitle">Setlists</h2>
+  <div id="friendSetlistsWrap"><div class="artist">Loading…</div></div>
+  <div class="sheet-actions">
+    <button class="btn-cancel" id="btnFriendSetlistsClose" style="flex:1;">Done</button>
+  </div>
+</div>
+
 <div class="sheet-backdrop" id="helpBackdrop"></div>
 <div class="sheet" id="helpSheet">
   <h2>Help</h2>
@@ -568,6 +592,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=58"></script>
+<script src="app.js?v=59"></script>
 </body>
 </html>

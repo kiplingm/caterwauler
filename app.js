@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "58";
+const BUILD_VERSION = "59";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -2477,12 +2477,9 @@ document.getElementById("settingsBtn").onclick = () => {
   renderThemeGrid();
   document.getElementById("missingResults").innerHTML = "";
   document.getElementById("inviteResult").style.display = "none";
-  document.getElementById("findUserResults").innerHTML = "";
-  document.getElementById("findUserInput").value = "";
   renderRangeModeUI(currentRangeMode);
   settingsBackdrop.classList.add("open");
   settingsSheet.classList.add("open");
-  loadFriendsList();
 };
 
 document.getElementById("genInviteBtn").onclick = async () => {
@@ -2577,6 +2574,95 @@ document.getElementById("openUsersBtn").onclick = () => {
 document.getElementById("btnUsersClose").onclick = closeUsers;
 usersBackdrop.onclick = closeUsers;
 enableSwipeToDismiss(usersSheet, closeUsers);
+
+// --- Friends screen (own top-level sheet — this is a mainstream social
+// feature, not app configuration, so it doesn't belong buried in
+// Settings) -----------------------------------------------------------
+const friendsBackdrop = document.getElementById("friendsBackdrop");
+const friendsSheet = document.getElementById("friendsSheet");
+function closeFriends(){
+  friendsBackdrop.classList.remove("open");
+  friendsSheet.classList.remove("open");
+}
+document.getElementById("friendsBtn").onclick = () => {
+  document.getElementById("findUserResults").innerHTML = "";
+  document.getElementById("findUserInput").value = "";
+  friendsBackdrop.classList.add("open");
+  friendsSheet.classList.add("open");
+  loadFriendsList();
+};
+document.getElementById("btnFriendsClose").onclick = closeFriends;
+friendsBackdrop.onclick = closeFriends;
+enableSwipeToDismiss(friendsSheet, closeFriends);
+
+const friendSetlistsBackdrop = document.getElementById("friendSetlistsBackdrop");
+const friendSetlistsSheet = document.getElementById("friendSetlistsSheet");
+function closeFriendSetlists(){
+  friendSetlistsBackdrop.classList.remove("open");
+  friendSetlistsSheet.classList.remove("open");
+}
+document.getElementById("btnFriendSetlistsClose").onclick = closeFriendSetlists;
+friendSetlistsBackdrop.onclick = closeFriendSetlists;
+enableSwipeToDismiss(friendSetlistsSheet, closeFriendSetlists);
+
+async function openFriendSetlists(friendId, friendUsername){
+  document.getElementById("friendSetlistsTitle").textContent = `@${friendUsername}'s setlists`;
+  const wrap = document.getElementById("friendSetlistsWrap");
+  wrap.innerHTML = `<div class="artist">Loading…</div>`;
+  friendSetlistsBackdrop.classList.add("open");
+  friendSetlistsSheet.classList.add("open");
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_friend_setlists`, {
+      method: "POST", headers: HEADERS,
+      body: JSON.stringify({ friend_id: friendId })
+    });
+    if(!res.ok) throw new Error("Failed");
+    const rows = await res.json();
+    if(!rows.length){
+      wrap.innerHTML = `<div class="artist">No setlists yet.</div>`;
+      return;
+    }
+    const bySetlist = {};
+    rows.forEach(r => {
+      if(!bySetlist[r.setlist_id]){
+        bySetlist[r.setlist_id] = { name: r.setlist_name, gig_date: r.gig_date, venue: r.venue, songs: [] };
+      }
+      bySetlist[r.setlist_id].songs.push(r);
+    });
+    wrap.innerHTML = Object.values(bySetlist).map(sl => `
+      <div class="user-row">
+        <div class="user-row-top"><span class="user-row-email">${escapeHtml(sl.name)}</span></div>
+        <div class="user-row-meta">
+          ${sl.gig_date ? formatDate(sl.gig_date) : "No date"}${sl.venue ? " · " + escapeHtml(sl.venue) : ""}
+        </div>
+        <div class="artist" style="margin-top:6px; font-family:'IBM Plex Mono',monospace; font-size:11px;">
+          ${sl.songs.map(s => `${escapeHtml(s.song_title)} — ${escapeHtml(s.song_artist)}`).join("<br>")}
+        </div>
+      </div>
+    `).join("");
+  }catch(e){
+    wrap.innerHTML = `<div class="artist">Couldn't load setlists.</div>`;
+  }
+}
+
+// Badge on the Friends icon — count of pending incoming requests. Checked
+// on sign-in and refreshed after any action that could change it.
+async function updateFriendsBadge(){
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/pending_friend_request_count`, {
+      method: "POST", headers: HEADERS
+    });
+    if(!res.ok) return;
+    const count = await res.json();
+    const badge = document.getElementById("friendsBadge");
+    if(count > 0){
+      badge.textContent = count > 9 ? "9+" : String(count);
+      badge.style.display = "flex";
+    }else{
+      badge.style.display = "none";
+    }
+  }catch(e){ /* non-critical, just skip the badge */ }
+}
 
 // A relative "last active" label built off last_sign_in_at. This is a
 // login timestamp, not real presence — worded as "active" rather than
@@ -3074,6 +3160,7 @@ async function sendFriendRequest(username, btn){
     };
     showToast(outcomes[data] || "Done");
     loadFriendsList();
+    updateFriendsBadge();
     document.getElementById("findUserBtn").click();
   }catch(e){
     showToast("Couldn't send that request — check your connection");
@@ -3123,7 +3210,10 @@ async function loadFriendsList(){
       html += friends.map(r => `
         <div class="invite-row">
           <span class="invite-row-email">@${escapeHtml(r.other_username)}</span>
-          <button class="invite-row-remove unfriend-btn" data-id="${r.friendship_id}">Remove</button>
+          <span style="display:flex; gap:6px;">
+            <button class="invite-row-remove view-setlists-btn" data-id="${r.other_user_id}" data-username="${r.other_username.replace(/"/g,'&quot;')}" style="color:var(--gold);">Setlists</button>
+            <button class="invite-row-remove unfriend-btn" data-id="${r.friendship_id}">Remove</button>
+          </span>
         </div>`).join("");
     }
     wrap.innerHTML = html || `<div class="artist">No friends or requests yet.</div>`;
@@ -3131,8 +3221,9 @@ async function loadFriendsList(){
     wrap.querySelectorAll(".accept-btn").forEach(b => b.onclick = () => respondFriendship(b.dataset.id, "accept"));
     wrap.querySelectorAll(".decline-btn").forEach(b => b.onclick = () => respondFriendship(b.dataset.id, "decline"));
     wrap.querySelectorAll(".cancel-btn, .unfriend-btn").forEach(b => b.onclick = () => respondFriendship(b.dataset.id, "remove"));
+    wrap.querySelectorAll(".view-setlists-btn").forEach(b => b.onclick = () => openFriendSetlists(b.dataset.id, b.dataset.username));
   }catch(e){
-    wrap.innerHTML = `<div class="artist">Couldn't load friends — try reopening Settings.</div>`;
+    wrap.innerHTML = `<div class="artist">Couldn't load friends — try reopening Friends.</div>`;
   }
 }
 
@@ -3149,6 +3240,7 @@ async function respondFriendship(id, action){
     if(!res.ok) throw new Error("Failed");
     showToast(action === "accept" ? "Friend added" : action === "decline" ? "Declined" : "Removed");
     loadFriendsList();
+    updateFriendsBadge();
   }catch(e){
     showToast("Couldn't update that — try again");
   }
@@ -3427,6 +3519,7 @@ async function onSignedIn(session){
   if(emailEl) emailEl.textContent = session.user.email;
   currentUserEmail = session.user.email;
   initImpersonationBanner();
+  updateFriendsBadge();
 
   await loadProfileRange(session.user.id);
 
