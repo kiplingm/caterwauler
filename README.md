@@ -135,11 +135,11 @@ after a deploy, silently undoing whatever just shipped.
 - Once on the Dell XPS: revisit the parked automated vocal-range
   extraction pipeline (yt-dlp + Demucs + CREPE/pYIN) — a better use of
   local compute than further Supabase micro-optimization.
-- **Security**: `public.lastfm_popularity_cache` and
-  `public.artist_similarity_cache` have RLS disabled — fully readable/
-  writable by anyone with the anon key. Low risk today (cache data only,
-  no user data), but worth locking down before wider testing:
-  `ALTER TABLE public.lastfm_popularity_cache ENABLE ROW LEVEL SECURITY;`
-  `ALTER TABLE public.artist_similarity_cache ENABLE ROW LEVEL SECURITY;`
-  — needs matching read policies added at the same time or these tables
-  go dark for the app itself.
+- ~~**Security**: `public.lastfm_popularity_cache` and
+  `public.artist_similarity_cache` have RLS disabled~~ — done: RLS
+  enabled on both, with `SELECT` policies for `anon`/`authenticated` so
+  the app's read paths keep working. No write policies added — both
+  tables are written only server-side (Edge Function / `pg_cron`) via
+  the service-role key, which bypasses RLS entirely, so direct writes
+  via the anon key are no longer possible. Confirmed via `get_advisors`
+  that both tables have dropped off the security lint list.
