@@ -18,6 +18,15 @@ A song card always has:
 - **Body** (`.card-body`, hidden until expanded) — fit line, key notes, source tag
   (est./verified), transpose suggestion if out of range, Spotify/YouTube links, genre tag,
   and the Performances / +Setlist / Edit action buttons.
+
+**The card itself should never carry view-specific controls that aren't part of the
+contract above.** If a view needs something a plain song card doesn't have — Setlist's
+reorder/remove buttons, for instance — that thing goes *outside* the card, as a sibling
+element in a wrapper the view owns, not inside `buildSongCardHtml()`'s output. That keeps
+every card visually and structurally identical no matter where it's rendered, which is
+the whole point of this doc. See `renderSetlistSongs()` / `.sl-song-row-wrap` for the
+pattern: the card is unmodified, and `.sl-song-controls` sits next to it as its own
+column.
 - **Expand/collapse** — tapping the head toggles the body via `toggleCardExpand()`, backed
   by the module-level `expandedCardIds` Set so the state survives re-renders (search,
   filter, sort, a status change elsewhere).
@@ -36,7 +45,7 @@ extension points instead of a parallel template:
 | `bodyActions` | Override the default Performances/+Setlist/Edit block with different action buttons — for candidates that aren't saved songs yet, e.g. a recommendation's Add/Dismiss. Pass raw HTML; `null` (default) keeps the standard actions when `song.id` is set. |
 | `keyNotes` | Pass `null` to suppress (Sing Now hides key notes to keep picks terse). |
 | `showLastPlayed` | Set `false` to hide the last-played line. |
-| `footer` | Always-visible content below the body, outside the expand gate — e.g. Setlist's move/remove row, which needs to work whether or not the card is expanded. |
+| `footer` | Always-visible content below the body, inside the card, outside the expand gate. Not currently used by any caller — Setlist's move/remove controls turned out to belong *outside* the card entirely (see below), not just outside the expand gate, so they're a sibling in `.sl-song-row-wrap` instead. Kept as an option for a future case where something genuinely belongs inside the card but outside the body. |
 
 Call `wireSongCardEvents(container, refresh)` once per render, right after setting
 `container.innerHTML`, where `refresh` is whatever re-renders *that view* after a status

@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "64";
+const BUILD_VERSION = "65";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -2274,29 +2274,31 @@ function renderSetlistSongs(){
     listEl.innerHTML = `<div class="empty" style="padding:16px 4px;">No songs yet — search below to add some.</div>`;
     return;
   }
-  // Built from the same buildSongCardHtml() as Songbook and Sing Now, so
-  // a song looks and behaves like the same object everywhere. cardKey
-  // uses the setlist_songs row id (not song_id) so expand state and
-  // event wiring stay correct even if the same song appears twice in
-  // one setlist. Reorder/remove controls go in `footer`, outside the
-  // collapsible body, since they're core to managing the setlist
-  // regardless of expand state.
-  listEl.innerHTML = currentSetlistSongs.map((s, i) => buildSongCardHtml(
-    {...s, id: s.song_id},
-    {
-      cardKey: s.id,
-      extraClasses: "sl-song-row",
-      contentClass: "sl-song-content",
-      leadingHead: `<div class="sl-song-num">${i+1}</div>`,
-      footer: `
-        <div class="sl-song-controls">
-          <button class="sl-move-btn" data-id="${s.id}" data-dir="up" ${i===0 ? "disabled" : ""} aria-label="Move up">↑</button>
-          <button class="sl-move-btn" data-id="${s.id}" data-dir="down" ${i===currentSetlistSongs.length-1 ? "disabled" : ""} aria-label="Move down">↓</button>
-          <button class="sl-remove-btn" data-id="${s.id}" aria-label="Remove">✕</button>
-        </div>
-      `
-    }
-  )).join("");
+  // The card itself is built from buildSongCardHtml() with no footer/
+  // contentClass override, so it's the identical shape as a Songbook
+  // card — no setlist-only padding or trailing row baked in. The
+  // reorder/remove controls live outside the card, as a sibling column
+  // in .sl-song-row-wrap, so they can't make this card look different
+  // from any other card. cardKey uses the setlist_songs row id (not
+  // song_id) so expand state and event wiring stay correct even if the
+  // same song appears twice in one setlist.
+  listEl.innerHTML = currentSetlistSongs.map((s, i) => `
+    <div class="sl-song-row-wrap">
+      ${buildSongCardHtml(
+        {...s, id: s.song_id},
+        {
+          cardKey: s.id,
+          extraClasses: "sl-song-row",
+          leadingHead: `<div class="sl-song-num">${i+1}</div>`
+        }
+      )}
+      <div class="sl-song-controls">
+        <button class="sl-move-btn" data-id="${s.id}" data-dir="up" ${i===0 ? "disabled" : ""} aria-label="Move up">↑</button>
+        <button class="sl-move-btn" data-id="${s.id}" data-dir="down" ${i===currentSetlistSongs.length-1 ? "disabled" : ""} aria-label="Move down">↓</button>
+        <button class="sl-remove-btn" data-id="${s.id}" aria-label="Remove">✕</button>
+      </div>
+    </div>
+  `).join("");
 
   wireSongCardEvents(listEl, () => fetchSetlistSongs(currentSetlistId));
   listEl.querySelectorAll(".sl-move-btn").forEach(b=>{

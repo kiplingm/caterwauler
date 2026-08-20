@@ -619,20 +619,20 @@
   }
   .setlist-item-actions{display:flex; flex-direction:column; gap:6px; flex:none;}
 
-  /* .sl-song-row layers onto .card, so it inherits the same 14px radius,
-     background, expand/collapse (.card-body), and card-in animation as
-     a Songbook card via buildSongCardHtml() — only the reorder/remove
-     row is specific to a setlist context, and sits outside the
-     collapsible body. */
-  .sl-song-row{margin-bottom:10px;}
-  .sl-song-content{padding:12px 14px 10px;}
+  /* .sl-song-row layers onto .card with no overrides at all, so it's
+     visually identical to a Songbook/Sing Now card — the reorder/remove
+     controls live outside it entirely, in .sl-song-controls, a sibling
+     column inside .sl-song-row-wrap, so they can never make the card
+     itself look or behave differently from anywhere else it appears
+     (see docs/SONG_CARD_STANDARD.md). */
+  .sl-song-row-wrap{display:flex; align-items:stretch; gap:8px; margin-bottom:10px;}
+  .sl-song-row-wrap .sl-song-row{margin-bottom:0; flex:1; min-width:0;}
   .sl-song-num{
     font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--cream-dim); flex:none;
     width:18px; padding-top:1px;
   }
   .sl-song-controls{
-    display:flex; justify-content:flex-end; gap:5px;
-    margin-top:10px; padding-top:10px; border-top:1px solid var(--line);
+    display:flex; flex-direction:column; justify-content:center; gap:6px; flex:none;
   }
   .sl-move-btn, .sl-remove-btn{
     background:transparent; border:1px solid var(--line); color:var(--cream-dim); border-radius:7px;
