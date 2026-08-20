@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "61";
+const BUILD_VERSION = "62";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -2231,7 +2231,7 @@ document.getElementById("btnDeleteSetlist").onclick = async () => {
 async function fetchSetlistSongs(setlistId){
   try{
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/setlist_songs?setlist_id=eq.${setlistId}&select=id,song_id,position,songs(title,artist,status,low_note,high_note,in_karafun)&order=position.asc`,
+      `${SUPABASE_URL}/rest/v1/setlist_songs?setlist_id=eq.${setlistId}&select=id,song_id,position,songs(title,artist,status,low_note,high_note,in_karafun,key_notes,range_source,genre)&order=position.asc`,
       {headers: HEADERS}
     );
     if(!res.ok) throw new Error("Fetch failed");
@@ -2244,7 +2244,10 @@ async function fetchSetlistSongs(setlistId){
       status: r.songs && r.songs.status,
       low_note: r.songs && r.songs.low_note,
       high_note: r.songs && r.songs.high_note,
-      in_karafun: r.songs && r.songs.in_karafun
+      in_karafun: r.songs && r.songs.in_karafun,
+      key_notes: r.songs && r.songs.key_notes,
+      range_source: r.songs && r.songs.range_source,
+      genre: r.songs && r.songs.genre
     }));
   }catch(err){
     currentSetlistSongs = [];
@@ -2259,40 +2262,61 @@ function renderSetlistSongs(){
     listEl.innerHTML = `<div class="empty" style="padding:16px 4px;">No songs yet — search below to add some.</div>`;
     return;
   }
-  // Reuses the same building blocks as a Songbook card (range strip,
-  // .title/.artist typography, status pill, KaraFun badge, streaming
-  // links) so a song looks like the same object whether you're viewing
-  // it in the Songbook or inside a setlist — only the move/remove
-  // controls are unique to this view.
+  // Reuses the exact same .card / .card-head / .card-body structure as a
+  // Songbook card (range strip, expand/collapse, range info + streaming
+  // links, genre tag, Performances/Edit actions) so a song looks and
+  // behaves like the same object whether you're viewing it in the
+  // Songbook or inside a setlist — only the reorder/remove row is
+  // unique to this view, and sits outside the collapsible body since
+  // it's core to managing the setlist regardless of expand state.
   listEl.innerHTML = currentSetlistSongs.map((s, i) => `
-    <div class="card sl-song-row" data-id="${s.id}">
+    <div class="card sl-song-row ${expandedCardIds.has(s.id) ? "expanded" : ""}" data-id="${s.id}">
       ${renderCardStrip(s.low_note, s.high_note)}
       <div class="card-content sl-song-content">
-        <div class="sl-song-top">
+        <div class="sl-song-top card-head" data-id="${s.id}">
           <div class="sl-song-num">${i+1}</div>
           <div class="sl-song-main">
             <div class="title">${escapeHtml(s.title)}${s.in_karafun ? `<span class="karafun-badge" title="In the KaraFun catalog">K</span>` : ""}</div>
             <div class="artist">${escapeHtml(s.artist)}</div>
           </div>
-          ${s.status ? `<div class="status-pill status-${s.status}"><span class="status-icon">${STATUS_ICONS[s.status]||""}</span> ${s.status}</div>` : ""}
-        </div>
-        <div class="sl-song-bottom">
-          ${s.title && s.artist ? externalLinksHtml(s.title, s.artist) : "<span></span>"}
-          <div class="sl-song-actions">
-            <button class="sl-move-btn" data-id="${s.id}" data-dir="up" ${i===0 ? "disabled" : ""} aria-label="Move up">↑</button>
-            <button class="sl-move-btn" data-id="${s.id}" data-dir="down" ${i===currentSetlistSongs.length-1 ? "disabled" : ""} aria-label="Move down">↓</button>
-            <button class="sl-remove-btn" data-id="${s.id}" aria-label="Remove">✕</button>
+          <div class="card-head-right">
+            ${s.status ? `<div class="status-pill status-${s.status}"><span class="status-icon">${STATUS_ICONS[s.status]||""}</span> ${s.status}</div>` : ""}
+            <span class="card-chevron">${expandedCardIds.has(s.id) ? "▲" : "▼"}</span>
           </div>
+        </div>
+        <div class="card-body">
+          ${renderRangeInfo(s.low_note, s.high_note, s.range_source, s.key_notes, s.title, s.artist)}
+          ${s.genre ? `<div class="card-meta"><span>${escapeHtml(s.genre)}</span></div>` : ""}
+          ${s.song_id ? `
+            <div class="card-actions">
+              <button class="logBtn primary" data-id="${s.song_id}">Performances</button>
+              <button class="editBtn" data-id="${s.song_id}">Edit</button>
+            </div>
+          ` : ""}
+        </div>
+        <div class="sl-song-controls">
+          <button class="sl-move-btn" data-id="${s.id}" data-dir="up" ${i===0 ? "disabled" : ""} aria-label="Move up">↑</button>
+          <button class="sl-move-btn" data-id="${s.id}" data-dir="down" ${i===currentSetlistSongs.length-1 ? "disabled" : ""} aria-label="Move down">↓</button>
+          <button class="sl-remove-btn" data-id="${s.id}" aria-label="Remove">✕</button>
         </div>
       </div>
     </div>
   `).join("");
 
+  listEl.querySelectorAll(".card-head").forEach(el=>{
+    el.onclick = () => toggleCardExpand(el.dataset.id);
+  });
   listEl.querySelectorAll(".sl-move-btn").forEach(b=>{
     b.onclick = () => moveSetlistSong(b.dataset.id, b.dataset.dir);
   });
   listEl.querySelectorAll(".sl-remove-btn").forEach(b=>{
     b.onclick = () => removeSetlistSong(b.dataset.id);
+  });
+  listEl.querySelectorAll(".logBtn").forEach(b=>{
+    b.onclick = (e) => { e.stopPropagation(); openLog(b.dataset.id); };
+  });
+  listEl.querySelectorAll(".editBtn").forEach(b=>{
+    b.onclick = (e) => { e.stopPropagation(); openEdit(b.dataset.id); };
   });
 }
 

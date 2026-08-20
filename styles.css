@@ -619,22 +619,21 @@
   .setlist-item-actions{display:flex; flex-direction:column; gap:6px; flex:none;}
 
   /* .sl-song-row layers onto .card, so it inherits the same 14px radius,
-     background, and card-in animation as a Songbook card — only the
-     internal layout (num + status pill on top, links + move/remove
-     controls below) is specific to a setlist context. */
+     background, expand/collapse (.card-body), and card-in animation as
+     a Songbook card — only the reorder/remove row is specific to a
+     setlist context, and sits outside the collapsible body. */
   .sl-song-row{margin-bottom:10px;}
   .sl-song-content{padding:12px 14px 10px;}
-  .sl-song-top{display:flex; align-items:flex-start; gap:10px;}
+  .sl-song-top{display:flex; align-items:flex-start; gap:10px; cursor:pointer;}
   .sl-song-num{
     font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--cream-dim); flex:none;
     width:18px; padding-top:1px;
   }
   .sl-song-main{flex:1; min-width:0;}
-  .sl-song-bottom{
-    display:flex; align-items:center; justify-content:space-between; gap:10px;
+  .sl-song-controls{
+    display:flex; justify-content:flex-end; gap:5px;
     margin-top:10px; padding-top:10px; border-top:1px solid var(--line);
   }
-  .sl-song-actions{display:flex; gap:5px; flex:none;}
   .sl-move-btn, .sl-remove-btn{
     background:transparent; border:1px solid var(--line); color:var(--cream-dim); border-radius:7px;
     width:28px; height:28px; font-size:13px; line-height:1; font-family:'Inter',sans-serif;
