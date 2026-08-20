@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "59";
+const BUILD_VERSION = "60";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -1882,10 +1882,10 @@ async function addRecommendation(rec, itemEl){
   try{
     const res = await fetch(`${SUPABASE_URL}/rest/v1/songs`, {
       method:"POST", headers:{...HEADERS, "Prefer":"return=representation"},
-      body: JSON.stringify({title: rec.title, artist: rec.artist, status: "Learning", low_note: rec.low_note || null, high_note: rec.high_note || null, range_source: rec.low_note ? "estimated" : "manual"})
+      body: JSON.stringify({title: rec.title, artist: rec.artist, status: "Test", low_note: rec.low_note || null, high_note: rec.high_note || null, range_source: rec.low_note ? "estimated" : "manual"})
     });
     if(!res.ok) throw new Error("Add failed");
-    showToast(`Added "${rec.title}" to Learning`);
+    showToast(`Added "${rec.title}" to Test`);
     await animateRemove(itemEl);
     fetchSongs();
   }catch(err){
