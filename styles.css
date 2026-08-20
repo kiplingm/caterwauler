@@ -224,6 +224,7 @@
     to{opacity:0; transform:scale(0.97); max-height:0; margin-bottom:0; overflow:hidden;}
   }
   .card-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
+  .card-head-main{display:flex; align-items:flex-start; gap:10px; flex:1; min-width:0;}
   .card-head{cursor:pointer;}
   .card-head-right{position:relative;}
   .card-head-right-row{display:flex; align-items:center; gap:14px;}
@@ -620,16 +621,15 @@
 
   /* .sl-song-row layers onto .card, so it inherits the same 14px radius,
      background, expand/collapse (.card-body), and card-in animation as
-     a Songbook card — only the reorder/remove row is specific to a
-     setlist context, and sits outside the collapsible body. */
+     a Songbook card via buildSongCardHtml() — only the reorder/remove
+     row is specific to a setlist context, and sits outside the
+     collapsible body. */
   .sl-song-row{margin-bottom:10px;}
   .sl-song-content{padding:12px 14px 10px;}
-  .sl-song-top{display:flex; align-items:flex-start; gap:10px; cursor:pointer;}
   .sl-song-num{
     font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--cream-dim); flex:none;
     width:18px; padding-top:1px;
   }
-  .sl-song-main{flex:1; min-width:0;}
   .sl-song-controls{
     display:flex; justify-content:flex-end; gap:5px;
     margin-top:10px; padding-top:10px; border-top:1px solid var(--line);

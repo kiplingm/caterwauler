@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "62";
+const BUILD_VERSION = "63";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -458,6 +458,117 @@ function renderRangeInfo(low, high, rangeSource, keyNotes, title, artist){
     </div>`;
 }
 
+// ============================================================
+// SONG CARD — the single canonical builder for how a saved song
+// (a row from the `songs` table) is rendered anywhere in the app.
+// Songbook, Sing Now, and Setlists all call this instead of
+// hand-writing their own <div class="card">, so the three views
+// can't drift out of sync with each other the way they used to.
+// See docs/SONG_CARD_STANDARD.md for the full contract, including
+// the two intentional exceptions (recommendation candidates and
+// KaraFun catalog fallback rows — neither is a saved song yet).
+// ============================================================
+function buildSongCardHtml(song, opts = {}){
+  const {
+    cardKey = song.id,          // expand-state + DOM lookup key; pass a
+                                 // different value than song.id when the
+                                 // same song could appear twice in one
+                                 // list (e.g. a setlist), so expand state
+                                 // and event wiring stay per-row
+    extraClasses = "",          // e.g. "sing-now-card", "sl-song-row"
+    leadingHead = "",           // extra markup at the start of the head
+                                 // row, e.g. a setlist position number
+    keyNotes = song.key_notes,  // pass null to suppress (Sing Now hides them)
+    showLastPlayed = true,
+    footer = "",                // always-visible content below card-body,
+                                 // outside the expand gate (e.g. setlist
+                                 // move/remove controls)
+    contentClass = ""           // extra class on .card-content, for
+                                 // view-specific padding tweaks
+  } = opts;
+
+  const expanded = expandedCardIds.has(cardKey);
+  const songId = song.id;
+
+  return `
+    <div class="card ${extraClasses} ${expanded ? "expanded" : ""}" data-id="${cardKey}">
+      ${renderCardStrip(song.low_note, song.high_note)}
+      <div class="card-content ${contentClass}">
+        <div class="card-top card-head" data-id="${cardKey}">
+          <div class="card-head-main">
+            ${leadingHead}
+            <div>
+              <div class="title">${escapeHtml(song.title)}${song.in_karafun ? `<span class="karafun-badge" title="In the KaraFun catalog">K</span>` : ""}</div>
+              <div class="artist">${escapeHtml(song.artist)}</div>
+            </div>
+          </div>
+          <div class="card-head-right">
+            <div class="card-head-right-row">
+              ${editingStatusId === songId ? `
+                <select class="status-edit-select" data-id="${songId}">
+                  ${STATUS_OPTIONS.map(opt => `<option value="${opt}" ${opt===song.status?"selected":""}>${opt}</option>`).join("")}
+                </select>
+              ` : (song.status ? `
+                <div class="status-pill status-${song.status}" data-id="${songId}"><span class="status-icon">${STATUS_ICONS[song.status]||""}</span> ${song.status}</div>
+              ` : "")}
+              <span class="card-chevron">${expanded ? "▲" : "▼"}</span>
+            </div>
+            ${showLastPlayed && song.last_played ? `<div class="card-last-played">Last played ${formatDate(song.last_played)}${song.last_venue ? ` · ${escapeHtml(song.last_venue)}` : ""}</div>` : ""}
+          </div>
+        </div>
+        <div class="card-body">
+          ${renderRangeInfo(song.low_note, song.high_note, song.range_source, keyNotes, song.title, song.artist)}
+          ${song.genre ? `<div class="card-meta"><span>${escapeHtml(song.genre)}</span></div>` : ""}
+          ${songId ? `
+            <div class="card-actions">
+              <button class="logBtn primary" data-id="${songId}">Performances</button>
+              <button class="setlistAddBtn" data-id="${songId}">+ Setlist</button>
+              <button class="editBtn" data-id="${songId}">Edit</button>
+            </div>
+          ` : ""}
+        </div>
+        ${footer}
+      </div>
+    </div>
+  `;
+}
+
+// Wires up every interaction a card built by buildSongCardHtml supports
+// (expand/collapse, inline status editing, Performances/+Setlist/Edit)
+// for every card inside `container`. Call once, right after setting
+// container.innerHTML, in any view built from buildSongCardHtml.
+// `refresh` is called after a status edit closes (Enter, blur, or a new
+// selection) — pass the function that re-renders *this* view; Songbook
+// and Sing Now both use the top-level render() dispatcher, but a
+// setlist's song sheet needs its own re-fetch since it keeps a separate
+// local copy of song data.
+function wireSongCardEvents(container, refresh = render){
+  container.querySelectorAll(".card-head").forEach(el=>{
+    el.onclick = (e) => {
+      if(e.target.closest(".status-pill") || e.target.closest(".status-edit-select")) return;
+      toggleCardExpand(el.dataset.id);
+    };
+  });
+  container.querySelectorAll(".status-pill").forEach(el=>{
+    el.onclick = (e) => { e.stopPropagation(); editingStatusId = el.dataset.id; refresh(); };
+  });
+  container.querySelectorAll(".status-edit-select").forEach(sel=>{
+    sel.onclick = (e) => e.stopPropagation();
+    sel.onchange = () => updateStatus(sel.dataset.id, sel.value);
+    sel.onblur = () => { editingStatusId = null; refresh(); };
+    setTimeout(()=>sel.focus(), 0);
+  });
+  container.querySelectorAll(".logBtn").forEach(b=>{
+    b.onclick = (e) => { e.stopPropagation(); openLog(b.dataset.id); };
+  });
+  container.querySelectorAll(".setlistAddBtn").forEach(b=>{
+    b.onclick = (e) => { e.stopPropagation(); openAddToSetlist(b.dataset.id); };
+  });
+  container.querySelectorAll(".editBtn").forEach(b=>{
+    b.onclick = (e) => { e.stopPropagation(); openEdit(b.dataset.id); };
+  });
+}
+
 function render(){
   if(currentView === "singNow"){
     renderSingNow();
@@ -522,61 +633,11 @@ function renderSingNow(){
 
   listEl.innerHTML = `
     <div class="sing-now-intro">Your next best picks, right now:</div>
-    ${picks.map(s => `
-      <div class="card sing-now-card ${expandedCardIds.has(s.id) ? "expanded" : ""}" data-id="${s.id}">
-        ${renderCardStrip(s.low_note, s.high_note)}
-        <div class="card-content">
-          <div class="card-top card-head" data-id="${s.id}">
-            <div>
-              <div class="title">${escapeHtml(s.title)}${s.in_karafun ? `<span class="karafun-badge" title="In the KaraFun catalog">K</span>` : ""}</div>
-              <div class="artist">${escapeHtml(s.artist)}</div>
-            </div>
-            <div class="card-head-right">
-              <div class="card-head-right-row">
-                ${editingStatusId === s.id ? `
-                  <select class="status-edit-select" data-id="${s.id}">
-                    ${STATUS_OPTIONS.map(opt => `<option value="${opt}" ${opt===s.status?"selected":""}>${opt}</option>`).join("")}
-                  </select>
-                ` : `
-                  <div class="status-pill status-${s.status}" data-id="${s.id}"><span class="status-icon">${STATUS_ICONS[s.status]||""}</span> ${s.status}</div>
-                `}
-                <span class="card-chevron">${expandedCardIds.has(s.id) ? "▲" : "▼"}</span>
-              </div>
-              ${s.last_played ? `<div class="card-last-played">Last played ${formatDate(s.last_played)}${s.last_venue ? ` · ${escapeHtml(s.last_venue)}` : ""}</div>` : ""}
-            </div>
-          </div>
-          <div class="card-body">
-            ${renderRangeInfo(s.low_note, s.high_note, s.range_source, null, s.title, s.artist)}
-            <div class="card-actions">
-              <button class="logBtn primary" data-id="${s.id}">Performances</button>
-              <button class="setlistAddBtn" data-id="${s.id}">+ Setlist</button>
-              <button class="editBtn" data-id="${s.id}">Edit</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    `).join("")}
+    ${picks.map(s => buildSongCardHtml(s, {extraClasses: "sing-now-card", keyNotes: null})).join("")}
     <button class="reshuffle-btn" id="reshuffleBtn">${SHUFFLE_ICON_SVG} Give me different picks</button>
   `;
 
-  listEl.querySelectorAll(".card-head").forEach(el=>{
-    el.onclick = (e) => {
-      if(e.target.closest(".status-pill") || e.target.closest(".status-edit-select")) return;
-      toggleCardExpand(el.dataset.id);
-    };
-  });
-  listEl.querySelectorAll(".status-pill").forEach(el=>{
-    el.onclick = (e) => { e.stopPropagation(); editingStatusId = el.dataset.id; render(); };
-  });
-  listEl.querySelectorAll(".status-edit-select").forEach(sel=>{
-    sel.onclick = (e) => e.stopPropagation();
-    sel.onchange = () => updateStatus(sel.dataset.id, sel.value);
-    sel.onblur = () => { editingStatusId = null; render(); };
-    setTimeout(()=>sel.focus(), 0);
-  });
-  document.querySelectorAll(".logBtn").forEach(b=>b.onclick = ()=>openLog(b.dataset.id));
-  document.querySelectorAll(".setlistAddBtn").forEach(b=>b.onclick = ()=>openAddToSetlist(b.dataset.id));
-  document.querySelectorAll(".editBtn").forEach(b=>b.onclick = ()=>openEdit(b.dataset.id));
+  wireSongCardEvents(listEl);
   document.getElementById("reshuffleBtn").onclick = () => {
     picks.forEach(s => singNowExcludeIds.add(s.id));
     renderSingNow();
@@ -668,62 +729,9 @@ function renderSongbook(){
     return;
   }
 
-  listEl.innerHTML = filtered.map(s => `
-    <div class="card ${expandedCardIds.has(s.id) ? "expanded" : ""}" data-id="${s.id}">
-      ${renderCardStrip(s.low_note, s.high_note)}
-      <div class="card-content">
-        <div class="card-top card-head" data-id="${s.id}">
-          <div>
-            <div class="title">${escapeHtml(s.title)}${s.in_karafun ? `<span class="karafun-badge" title="In the KaraFun catalog">K</span>` : ""}</div>
-            <div class="artist">${escapeHtml(s.artist)}</div>
-          </div>
-          <div class="card-head-right">
-            <div class="card-head-right-row">
-              ${editingStatusId === s.id ? `
-                <select class="status-edit-select" data-id="${s.id}">
-                  ${STATUS_OPTIONS.map(opt => `<option value="${opt}" ${opt===s.status?"selected":""}>${opt}</option>`).join("")}
-                </select>
-              ` : `
-                <div class="status-pill status-${s.status}" data-id="${s.id}"><span class="status-icon">${STATUS_ICONS[s.status]||""}</span> ${s.status}</div>
-              `}
-              <span class="card-chevron">${expandedCardIds.has(s.id) ? "▲" : "▼"}</span>
-            </div>
-            ${s.last_played ? `<div class="card-last-played">Last played ${formatDate(s.last_played)}${s.last_venue ? ` · ${escapeHtml(s.last_venue)}` : ""}</div>` : ""}
-          </div>
-        </div>
-        <div class="card-body">
-          ${renderRangeInfo(s.low_note, s.high_note, s.range_source, s.key_notes, s.title, s.artist)}
-          ${s.genre ? `<div class="card-meta"><span>${escapeHtml(s.genre)}</span></div>` : ""}
-          <div class="card-actions">
-            <button class="logBtn primary" data-id="${s.id}">Performances</button>
-            <button class="setlistAddBtn" data-id="${s.id}">+ Setlist</button>
-            <button class="editBtn" data-id="${s.id}">Edit</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  `).join("");
+  listEl.innerHTML = filtered.map(s => buildSongCardHtml(s)).join("");
 
-  document.querySelectorAll(".card-head").forEach(el=>{
-    el.onclick = (e) => {
-      // Don't toggle expand when the click was actually on the status
-      // pill or its editor — those have their own handlers below.
-      if(e.target.closest(".status-pill") || e.target.closest(".status-edit-select")) return;
-      toggleCardExpand(el.dataset.id);
-    };
-  });
-  document.querySelectorAll(".status-pill").forEach(el=>{
-    el.onclick = (e) => { e.stopPropagation(); editingStatusId = el.dataset.id; render(); };
-  });
-  document.querySelectorAll(".status-edit-select").forEach(sel=>{
-    sel.onclick = (e) => e.stopPropagation();
-    sel.onchange = () => updateStatus(sel.dataset.id, sel.value);
-    sel.onblur = () => { editingStatusId = null; render(); };
-    setTimeout(()=>sel.focus(), 0);
-  });
-  document.querySelectorAll(".logBtn").forEach(b=>b.onclick = ()=>openLog(b.dataset.id));
-  document.querySelectorAll(".setlistAddBtn").forEach(b=>b.onclick = ()=>openAddToSetlist(b.dataset.id));
-  document.querySelectorAll(".editBtn").forEach(b=>b.onclick = ()=>openEdit(b.dataset.id));
+  wireSongCardEvents(listEl);
 }
 
 // Toggles one card's expanded state directly in the DOM (no full render(),
@@ -760,7 +768,11 @@ async function updateStatus(id, newStatus){
     });
     if(!res.ok) throw new Error("Status update failed");
     showToast(`Status set to ${newStatus}`);
-    fetchSongs();
+    await fetchSongs();
+    // fetchSongs() -> render() refreshes Songbook/Sing Now/Setlists-list,
+    // but not an open setlist's song sheet — that keeps its own local
+    // copy (currentSetlistSongs), so refresh it separately if open.
+    if(currentSetlistId) fetchSetlistSongs(currentSetlistId);
   }catch(err){
     showToast("Error: " + err.message);
     render();
@@ -2262,61 +2274,36 @@ function renderSetlistSongs(){
     listEl.innerHTML = `<div class="empty" style="padding:16px 4px;">No songs yet — search below to add some.</div>`;
     return;
   }
-  // Reuses the exact same .card / .card-head / .card-body structure as a
-  // Songbook card (range strip, expand/collapse, range info + streaming
-  // links, genre tag, Performances/Edit actions) so a song looks and
-  // behaves like the same object whether you're viewing it in the
-  // Songbook or inside a setlist — only the reorder/remove row is
-  // unique to this view, and sits outside the collapsible body since
-  // it's core to managing the setlist regardless of expand state.
-  listEl.innerHTML = currentSetlistSongs.map((s, i) => `
-    <div class="card sl-song-row ${expandedCardIds.has(s.id) ? "expanded" : ""}" data-id="${s.id}">
-      ${renderCardStrip(s.low_note, s.high_note)}
-      <div class="card-content sl-song-content">
-        <div class="sl-song-top card-head" data-id="${s.id}">
-          <div class="sl-song-num">${i+1}</div>
-          <div class="sl-song-main">
-            <div class="title">${escapeHtml(s.title)}${s.in_karafun ? `<span class="karafun-badge" title="In the KaraFun catalog">K</span>` : ""}</div>
-            <div class="artist">${escapeHtml(s.artist)}</div>
-          </div>
-          <div class="card-head-right">
-            ${s.status ? `<div class="status-pill status-${s.status}"><span class="status-icon">${STATUS_ICONS[s.status]||""}</span> ${s.status}</div>` : ""}
-            <span class="card-chevron">${expandedCardIds.has(s.id) ? "▲" : "▼"}</span>
-          </div>
-        </div>
-        <div class="card-body">
-          ${renderRangeInfo(s.low_note, s.high_note, s.range_source, s.key_notes, s.title, s.artist)}
-          ${s.genre ? `<div class="card-meta"><span>${escapeHtml(s.genre)}</span></div>` : ""}
-          ${s.song_id ? `
-            <div class="card-actions">
-              <button class="logBtn primary" data-id="${s.song_id}">Performances</button>
-              <button class="editBtn" data-id="${s.song_id}">Edit</button>
-            </div>
-          ` : ""}
-        </div>
+  // Built from the same buildSongCardHtml() as Songbook and Sing Now, so
+  // a song looks and behaves like the same object everywhere. cardKey
+  // uses the setlist_songs row id (not song_id) so expand state and
+  // event wiring stay correct even if the same song appears twice in
+  // one setlist. Reorder/remove controls go in `footer`, outside the
+  // collapsible body, since they're core to managing the setlist
+  // regardless of expand state.
+  listEl.innerHTML = currentSetlistSongs.map((s, i) => buildSongCardHtml(
+    {...s, id: s.song_id},
+    {
+      cardKey: s.id,
+      extraClasses: "sl-song-row",
+      contentClass: "sl-song-content",
+      leadingHead: `<div class="sl-song-num">${i+1}</div>`,
+      footer: `
         <div class="sl-song-controls">
           <button class="sl-move-btn" data-id="${s.id}" data-dir="up" ${i===0 ? "disabled" : ""} aria-label="Move up">↑</button>
           <button class="sl-move-btn" data-id="${s.id}" data-dir="down" ${i===currentSetlistSongs.length-1 ? "disabled" : ""} aria-label="Move down">↓</button>
           <button class="sl-remove-btn" data-id="${s.id}" aria-label="Remove">✕</button>
         </div>
-      </div>
-    </div>
-  `).join("");
+      `
+    }
+  )).join("");
 
-  listEl.querySelectorAll(".card-head").forEach(el=>{
-    el.onclick = () => toggleCardExpand(el.dataset.id);
-  });
+  wireSongCardEvents(listEl, () => fetchSetlistSongs(currentSetlistId));
   listEl.querySelectorAll(".sl-move-btn").forEach(b=>{
     b.onclick = () => moveSetlistSong(b.dataset.id, b.dataset.dir);
   });
   listEl.querySelectorAll(".sl-remove-btn").forEach(b=>{
     b.onclick = () => removeSetlistSong(b.dataset.id);
-  });
-  listEl.querySelectorAll(".logBtn").forEach(b=>{
-    b.onclick = (e) => { e.stopPropagation(); openLog(b.dataset.id); };
-  });
-  listEl.querySelectorAll(".editBtn").forEach(b=>{
-    b.onclick = (e) => { e.stopPropagation(); openEdit(b.dataset.id); };
   });
 }
 
