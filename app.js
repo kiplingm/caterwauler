@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "60";
+const BUILD_VERSION = "61";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -102,6 +102,9 @@ let karafunOnly = false;
 // anywhere) — resets to all-collapsed on next load, same as search/sort/
 // filter state.
 let expandedCardIds = new Set();
+// Same idea as expandedCardIds, but for recommendation candidates, which
+// have no DB id yet — keyed by lowercased "title|artist" instead.
+let expandedRecKeys = new Set();
 let searchTerm = "";
 let sortMode = "fit";
 // Sing Now is the landing view: a short, ranked stack of Solid songs meant
@@ -734,6 +737,17 @@ function toggleCardExpand(id){
   const isExpanded = card.classList.toggle("expanded");
   if(isExpanded) expandedCardIds.add(id); else expandedCardIds.delete(id);
   const chevron = card.querySelector(".card-chevron");
+  if(chevron) chevron.textContent = isExpanded ? "▲" : "▼";
+}
+
+// Same pattern as toggleCardExpand, for recommendation candidates in the
+// Recommendations sheet (see renderRecommendations / expandedRecKeys).
+function toggleRecItemExpand(item){
+  if(!item) return;
+  const key = item.dataset.recKey;
+  const isExpanded = item.classList.toggle("expanded");
+  if(isExpanded) expandedRecKeys.add(key); else expandedRecKeys.delete(key);
+  const chevron = item.querySelector(".card-chevron");
   if(chevron) chevron.textContent = isExpanded ? "▲" : "▼";
 }
 
@@ -1818,23 +1832,33 @@ function renderRecommendations(results, outOfRangeResults, unconfirmedSongs){
     return;
   }
 
-  const renderItem = (r, i, group) => `
-    <div class="rec-item">
-      <div class="rec-item-info">
-        <div class="rec-item-title">${escapeHtml(r.title)}</div>
-        <div class="rec-item-artist">${escapeHtml(r.artist)}</div>
-        <div class="rec-item-source">
-          ${escapeHtml(r.sourceLabel)} ·
-          <span class="rec-fit-badge ${r.fit.cls}">${r.fit.text}</span>
+  const renderItem = (r, i, group) => {
+    const key = `${r.title}|${r.artist}`.toLowerCase();
+    const isExpanded = expandedRecKeys.has(key);
+    return `
+    <div class="rec-item ${isExpanded ? "expanded" : ""}" data-rec-key="${escapeHtml(key)}">
+      <div class="rec-item-head">
+        <div class="rec-item-info">
+          <div class="rec-item-title">${escapeHtml(r.title)}</div>
+          <div class="rec-item-artist">${escapeHtml(r.artist)}</div>
         </div>
-        ${r.transposeMsg ? `<div class="rec-transpose">${escapeHtml(r.transposeMsg)}</div>` : ""}
+        <div class="rec-item-head-right">
+          <span class="rec-fit-badge ${r.fit.cls}">${r.fit.text}</span>
+          <span class="card-chevron">${isExpanded ? "▲" : "▼"}</span>
+        </div>
       </div>
-      <div class="rec-item-actions">
-        <button class="rec-add-btn" data-group="${group}" data-idx="${i}">+ Learning</button>
-        <button class="rec-dismiss-btn" data-group="${group}" data-idx="${i}">Dismiss</button>
+      <div class="rec-item-body">
+        <div class="rec-item-source">${escapeHtml(r.sourceLabel)}</div>
+        ${r.transposeMsg ? `<div class="rec-transpose">${escapeHtml(r.transposeMsg)}</div>` : ""}
+        ${externalLinksHtml(r.title, r.artist)}
+        <div class="rec-item-actions">
+          <button class="rec-add-btn" data-group="${group}" data-idx="${i}">+ Test</button>
+          <button class="rec-dismiss-btn" data-group="${group}" data-idx="${i}">Dismiss</button>
+        </div>
       </div>
     </div>
   `;
+  };
 
   let html = results.map((r, i) => renderItem(r, i, "fit")).join("");
   if(outOfRangeResults.length > 0){
@@ -1851,6 +1875,9 @@ function renderRecommendations(results, outOfRangeResults, unconfirmedSongs){
   listEl.querySelectorAll(".rec-dismiss-btn").forEach(b=>{
     const source = b.dataset.group === "fit" ? results : outOfRangeResults;
     b.onclick = () => dismissRecommendation(source[b.dataset.idx], b.closest(".rec-item"));
+  });
+  listEl.querySelectorAll(".rec-item-head").forEach(el=>{
+    el.onclick = () => toggleRecItemExpand(el.closest(".rec-item"));
   });
   wireAskClaudeRecBtn(unconfirmedSongs);
 }
