@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "63";
+const BUILD_VERSION = "64";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -102,9 +102,6 @@ let karafunOnly = false;
 // anywhere) — resets to all-collapsed on next load, same as search/sort/
 // filter state.
 let expandedCardIds = new Set();
-// Same idea as expandedCardIds, but for recommendation candidates, which
-// have no DB id yet — keyed by lowercased "title|artist" instead.
-let expandedRecKeys = new Set();
 let searchTerm = "";
 let sortMode = "fit";
 // Sing Now is the landing view: a short, ranked stack of Solid songs meant
@@ -473,11 +470,29 @@ function buildSongCardHtml(song, opts = {}){
     cardKey = song.id,          // expand-state + DOM lookup key; pass a
                                  // different value than song.id when the
                                  // same song could appear twice in one
-                                 // list (e.g. a setlist), so expand state
-                                 // and event wiring stay per-row
-    extraClasses = "",          // e.g. "sing-now-card", "sl-song-row"
+                                 // list (e.g. a setlist), or when there's
+                                 // no song.id yet (a recommendation
+                                 // candidate) — so expand state and event
+                                 // wiring stay per-row. May contain
+                                 // arbitrary text (e.g. "title|artist"),
+                                 // so it's always HTML/CSS-escaped below.
+    extraClasses = "",          // e.g. "sing-now-card", "sl-song-row", "rec-item"
     leadingHead = "",           // extra markup at the start of the head
                                  // row, e.g. a setlist position number
+    headExtra = "",             // extra markup in the head's right side,
+                                 // before the chevron — alongside (or
+                                 // instead of) the status pill, e.g. a
+                                 // recommendation's fit badge
+    bodyPrefix = "",            // extra markup at the very top of the
+                                 // body, before the range info, e.g. a
+                                 // recommendation's source label
+    bodyActions = null,         // override the default Performances/
+                                 // +Setlist/Edit block with different
+                                 // action buttons (raw HTML), for
+                                 // candidates that aren't saved songs yet
+                                 // — e.g. a recommendation's Add/Dismiss.
+                                 // Pass null (default) to keep the
+                                 // standard actions when song.id is set.
     keyNotes = song.key_notes,  // pass null to suppress (Sing Now hides them)
     showLastPlayed = true,
     footer = "",                // always-visible content below card-body,
@@ -489,12 +504,13 @@ function buildSongCardHtml(song, opts = {}){
 
   const expanded = expandedCardIds.has(cardKey);
   const songId = song.id;
+  const keyAttr = escapeHtml(String(cardKey));
 
   return `
-    <div class="card ${extraClasses} ${expanded ? "expanded" : ""}" data-id="${cardKey}">
+    <div class="card ${extraClasses} ${expanded ? "expanded" : ""}" data-id="${keyAttr}">
       ${renderCardStrip(song.low_note, song.high_note)}
       <div class="card-content ${contentClass}">
-        <div class="card-top card-head" data-id="${cardKey}">
+        <div class="card-top card-head" data-id="${keyAttr}">
           <div class="card-head-main">
             ${leadingHead}
             <div>
@@ -511,21 +527,23 @@ function buildSongCardHtml(song, opts = {}){
               ` : (song.status ? `
                 <div class="status-pill status-${song.status}" data-id="${songId}"><span class="status-icon">${STATUS_ICONS[song.status]||""}</span> ${song.status}</div>
               ` : "")}
+              ${headExtra}
               <span class="card-chevron">${expanded ? "▲" : "▼"}</span>
             </div>
             ${showLastPlayed && song.last_played ? `<div class="card-last-played">Last played ${formatDate(song.last_played)}${song.last_venue ? ` · ${escapeHtml(song.last_venue)}` : ""}</div>` : ""}
           </div>
         </div>
         <div class="card-body">
+          ${bodyPrefix}
           ${renderRangeInfo(song.low_note, song.high_note, song.range_source, keyNotes, song.title, song.artist)}
           ${song.genre ? `<div class="card-meta"><span>${escapeHtml(song.genre)}</span></div>` : ""}
-          ${songId ? `
+          ${bodyActions !== null ? bodyActions : (songId ? `
             <div class="card-actions">
               <button class="logBtn primary" data-id="${songId}">Performances</button>
               <button class="setlistAddBtn" data-id="${songId}">+ Setlist</button>
               <button class="editBtn" data-id="${songId}">Edit</button>
             </div>
-          ` : ""}
+          ` : "")}
         </div>
         ${footer}
       </div>
@@ -740,22 +758,11 @@ function renderSongbook(){
 // (search, filter, sort, a status change) still shows this card the way
 // the person left it.
 function toggleCardExpand(id){
-  const card = document.querySelector(`.card[data-id="${id}"]`);
+  const card = document.querySelector(`.card[data-id="${CSS.escape(id)}"]`);
   if(!card) return;
   const isExpanded = card.classList.toggle("expanded");
   if(isExpanded) expandedCardIds.add(id); else expandedCardIds.delete(id);
   const chevron = card.querySelector(".card-chevron");
-  if(chevron) chevron.textContent = isExpanded ? "▲" : "▼";
-}
-
-// Same pattern as toggleCardExpand, for recommendation candidates in the
-// Recommendations sheet (see renderRecommendations / expandedRecKeys).
-function toggleRecItemExpand(item){
-  if(!item) return;
-  const key = item.dataset.recKey;
-  const isExpanded = item.classList.toggle("expanded");
-  if(isExpanded) expandedRecKeys.add(key); else expandedRecKeys.delete(key);
-  const chevron = item.querySelector(".card-chevron");
   if(chevron) chevron.textContent = isExpanded ? "▲" : "▼";
 }
 
@@ -1844,33 +1851,28 @@ function renderRecommendations(results, outOfRangeResults, unconfirmedSongs){
     return;
   }
 
-  const renderItem = (r, i, group) => {
-    const key = `${r.title}|${r.artist}`.toLowerCase();
-    const isExpanded = expandedRecKeys.has(key);
-    return `
-    <div class="rec-item ${isExpanded ? "expanded" : ""}" data-rec-key="${escapeHtml(key)}">
-      <div class="rec-item-head">
-        <div class="rec-item-info">
-          <div class="rec-item-title">${escapeHtml(r.title)}</div>
-          <div class="rec-item-artist">${escapeHtml(r.artist)}</div>
+  // Built from the same buildSongCardHtml() as every saved-song card
+  // (see docs/SONG_CARD_STANDARD.md) — a recommendation candidate isn't
+  // a saved song yet, so there's no song.id/status; cardKey falls back
+  // to a "title|artist" string instead, headExtra carries the fit badge
+  // where a status pill would go, bodyPrefix carries the source label,
+  // and bodyActions swaps in Add/Dismiss in place of the standard
+  // Performances/+Setlist/Edit buttons.
+  const renderItem = (r, i, group) => buildSongCardHtml(
+    {title: r.title, artist: r.artist, low_note: r.low_note, high_note: r.high_note},
+    {
+      cardKey: `${r.title}|${r.artist}`.toLowerCase(),
+      extraClasses: "rec-item",
+      headExtra: `<span class="rec-fit-badge ${r.fit.cls}">${r.fit.text}</span>`,
+      bodyPrefix: `<div class="rec-item-source">${escapeHtml(r.sourceLabel)}</div>`,
+      bodyActions: `
+        <div class="card-actions">
+          <button class="rec-add-action primary" data-group="${group}" data-idx="${i}">+ Test</button>
+          <button class="rec-dismiss-action danger" data-group="${group}" data-idx="${i}">Dismiss</button>
         </div>
-        <div class="rec-item-head-right">
-          <span class="rec-fit-badge ${r.fit.cls}">${r.fit.text}</span>
-          <span class="card-chevron">${isExpanded ? "▲" : "▼"}</span>
-        </div>
-      </div>
-      <div class="rec-item-body">
-        <div class="rec-item-source">${escapeHtml(r.sourceLabel)}</div>
-        ${r.transposeMsg ? `<div class="rec-transpose">${escapeHtml(r.transposeMsg)}</div>` : ""}
-        ${externalLinksHtml(r.title, r.artist)}
-        <div class="rec-item-actions">
-          <button class="rec-add-btn" data-group="${group}" data-idx="${i}">+ Test</button>
-          <button class="rec-dismiss-btn" data-group="${group}" data-idx="${i}">Dismiss</button>
-        </div>
-      </div>
-    </div>
-  `;
-  };
+      `
+    }
+  );
 
   let html = results.map((r, i) => renderItem(r, i, "fit")).join("");
   if(outOfRangeResults.length > 0){
@@ -1880,16 +1882,14 @@ function renderRecommendations(results, outOfRangeResults, unconfirmedSongs){
   html += unconfirmedNote;
   listEl.innerHTML = html;
 
-  listEl.querySelectorAll(".rec-add-btn").forEach(b=>{
+  wireSongCardEvents(listEl);
+  listEl.querySelectorAll(".rec-add-action").forEach(b=>{
     const source = b.dataset.group === "fit" ? results : outOfRangeResults;
-    b.onclick = () => addRecommendation(source[b.dataset.idx], b.closest(".rec-item"));
+    b.onclick = (e) => { e.stopPropagation(); addRecommendation(source[b.dataset.idx], b.closest(".rec-item")); };
   });
-  listEl.querySelectorAll(".rec-dismiss-btn").forEach(b=>{
+  listEl.querySelectorAll(".rec-dismiss-action").forEach(b=>{
     const source = b.dataset.group === "fit" ? results : outOfRangeResults;
-    b.onclick = () => dismissRecommendation(source[b.dataset.idx], b.closest(".rec-item"));
-  });
-  listEl.querySelectorAll(".rec-item-head").forEach(el=>{
-    el.onclick = () => toggleRecItemExpand(el.closest(".rec-item"));
+    b.onclick = (e) => { e.stopPropagation(); dismissRecommendation(source[b.dataset.idx], b.closest(".rec-item")); };
   });
   wireAskClaudeRecBtn(unconfirmedSongs);
 }

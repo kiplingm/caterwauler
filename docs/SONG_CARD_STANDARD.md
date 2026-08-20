@@ -1,11 +1,12 @@
 # Song Card Standard
 
-Every place a **saved song** (a row from the `songs` table) appears in the UI — Songbook,
-Sing Now, and inside a Setlist — must be rendered by `buildSongCardHtml()` in `app.js`,
-and wired up by `wireSongCardEvents()`. Do not hand-write a new `<div class="card">...`
-template for a saved song. This is what kept drifting before (Setlists and Recommendations
-each grew their own slightly-different card over time) and is the thing this doc exists to
-stop from happening again.
+Every place a song appears as a card in the UI — a **saved song** (a row from the `songs`
+table) in Songbook, Sing Now, or a Setlist, or an **unsaved candidate** in Recommendations —
+must be rendered by `buildSongCardHtml()` in `app.js`, and wired up by
+`wireSongCardEvents()`. Do not hand-write a new `<div class="card">...` template. This is
+what kept drifting before — Setlists and Recommendations each grew their own
+slightly-different lookalike over time, styled and structured just differently enough to
+feel inconsistent — and is the thing this doc exists to stop from happening again.
 
 ## The contract
 
@@ -26,10 +27,13 @@ extension points instead of a parallel template:
 
 | Option | Use it for |
 |---|---|
-| `cardKey` | Expand-state/DOM-lookup key, when it must differ from `song.id` — e.g. Setlists key on the `setlist_songs` row id, since the same song can appear in a list twice. |
-| `extraClasses` | View-specific class on the outer `.card`, e.g. `sing-now-card`, `sl-song-row`. |
+| `cardKey` | Expand-state/DOM-lookup key, when it must differ from `song.id` — e.g. Setlists key on the `setlist_songs` row id (duplicate songs in one list), Recommendations key on a `"title\|artist"` string (no id exists yet). |
+| `extraClasses` | View-specific class on the outer `.card`, e.g. `sing-now-card`, `sl-song-row`, `rec-item`. |
 | `contentClass` | View-specific class on `.card-content`, for padding tweaks. |
 | `leadingHead` | Extra markup at the start of the head row, e.g. a setlist position number. |
+| `headExtra` | Extra markup in the head's right side, before the chevron — alongside or instead of the status pill, e.g. a recommendation's fit badge. |
+| `bodyPrefix` | Extra markup at the top of the body, before the range info, e.g. a recommendation's source label ("By Ed Sheeran" / genre match). |
+| `bodyActions` | Override the default Performances/+Setlist/Edit block with different action buttons — for candidates that aren't saved songs yet, e.g. a recommendation's Add/Dismiss. Pass raw HTML; `null` (default) keeps the standard actions when `song.id` is set. |
 | `keyNotes` | Pass `null` to suppress (Sing Now hides key notes to keep picks terse). |
 | `showLastPlayed` | Set `false` to hide the last-played line. |
 | `footer` | Always-visible content below the body, outside the expand gate — e.g. Setlist's move/remove row, which needs to work whether or not the card is expanded. |
@@ -48,29 +52,34 @@ template. If a genuinely new interaction is needed (a new action button, a new f
 element), add it as another opt-in parameter so every existing caller stays correct by
 default and only opts in where it applies.
 
-## Intentional exceptions (not song cards)
+## Intentional exception (not a song card)
 
-Two UI elements look card-adjacent but are deliberately **not** built from
-`buildSongCardHtml()`, because they represent something that isn't a saved song yet:
+One UI element looks card-adjacent but is deliberately **not** built from
+`buildSongCardHtml()`, because it represents something with even less shape than a
+recommendation candidate:
 
-- **Recommendation candidates** (`.rec-item` in the Recommendations sheet) — these are
-  KaraFun catalog matches the person hasn't added to their songbook. They have their own
-  collapsed/expanded pattern (`renderRecommendations()` / `expandedRecKeys`) that mirrors
-  the song card's head/body/chevron feel, but the actions are Add/Dismiss, not
-  Performances/Edit, and there's no DB id or status until the person adds it.
 - **KaraFun catalog fallback rows** (`.catalog-fallback-item`, shown when a Songbook search
-  matches nothing locally) — a lightweight title/artist/+Add row for the same reason:
-  nothing to expand, no status, no id yet.
+  matches nothing locally) — a lightweight title/artist/+Add row. No range data, no fit,
+  no source, nothing to expand — just enough to offer "add this." If this ever grows
+  real content (a fit estimate, a preview link), that's the moment to reconsider whether
+  it should become a `buildSongCardHtml()` call with its own `bodyActions`/`bodyPrefix`,
+  the same way recommendation candidates are.
 
-If either of these ever grows enough behavior to want real parity with a song card (e.g.
-Spotify/YouTube preview links, which recommendations already borrowed), that's a sign it
-may be time to represent it as a card-shaped view over an unsaved candidate — worth a
-deliberate decision, not an accidental copy-paste.
+Recommendation candidates (`.rec-item` in the Recommendations sheet) *are* built from
+`buildSongCardHtml()` — they're not saved songs, so they have no `song.id`/status, but
+they use `headExtra` for the fit badge, `bodyPrefix` for the source label, and
+`bodyActions` for Add/Dismiss in place of Performances/+Setlist/Edit. This used to be a
+hand-rolled lookalike with its own CSS and its own expand-state tracking
+(`expandedRecKeys`) — it looked similar to a song card but wasn't actually built from the
+same code, which is exactly the kind of drift this doc exists to prevent. Don't reintroduce
+a parallel `.rec-item` template if it needs to change; extend `buildSongCardHtml()` instead.
 
 ## Where things live
 
 - `buildSongCardHtml(song, opts)` — app.js, just after `renderRangeInfo()`.
 - `wireSongCardEvents(container, refresh)` — app.js, immediately after
   `buildSongCardHtml()`.
-- `toggleCardExpand(id)` / `expandedCardIds` — app.js, unchanged, shared by all callers.
-- Callers: `renderSongbook()`, `renderSingNow()`, `renderSetlistSongs()`.
+- `toggleCardExpand(id)` / `expandedCardIds` — app.js, unchanged, shared by all callers
+  (including recommendation candidates, keyed by `"title|artist"` instead of a DB id).
+- Callers: `renderSongbook()`, `renderSingNow()`, `renderSetlistSongs()`,
+  `renderRecommendations()`.
