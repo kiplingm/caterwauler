@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "66";
+const BUILD_VERSION = "67";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -536,7 +536,7 @@ function buildSongCardHtml(song, opts = {}){
         <div class="card-body">
           ${bodyPrefix}
           ${renderRangeInfo(song.low_note, song.high_note, song.range_source, keyNotes, song.title, song.artist)}
-          ${song.genre ? `<div class="card-meta"><span>${escapeHtml(song.genre)}</span></div>` : ""}
+          ${(song.genre || song.release_year) ? `<div class="card-meta">${song.genre ? `<span>${escapeHtml(song.genre)}</span>` : ""}${song.release_year ? `<span>${song.release_year}</span>` : ""}</div>` : ""}
           ${bodyActions !== null ? bodyActions : (songId ? `
             <div class="card-actions">
               <button class="logBtn primary" data-id="${songId}">Performances</button>
@@ -891,7 +891,7 @@ document.getElementById("fabAdd").onclick = ()=>{
   }
   document.getElementById("sheetTitle").textContent = "Add song";
   document.getElementById("editId").value = "";
-  ["fTitle","fArtist","fLow","fHigh","fGenre","fKeyNotes"].forEach(id=>document.getElementById(id).value="");
+  ["fTitle","fArtist","fLow","fHigh","fGenre","fReleaseYear","fKeyNotes"].forEach(id=>document.getElementById(id).value="");
   document.getElementById("fStatus").value = "Maybe";
   document.getElementById("fRangeSource").value = "manual";
   document.getElementById("titleSuggestions").classList.remove("open");
@@ -924,6 +924,7 @@ function openEdit(id){
   document.getElementById("fRangeSource").value = s.range_source || "manual";
   document.getElementById("fStatus").value = s.status || "Maybe";
   document.getElementById("fGenre").value = s.genre || "";
+  document.getElementById("fReleaseYear").value = s.release_year || "";
   document.getElementById("fKeyNotes").value = s.key_notes || "";
   document.getElementById("btnDeleteSong").style.display = "block";
   openSheet();
@@ -970,6 +971,7 @@ document.getElementById("btnSave").onclick = async ()=>{
     high_note: document.getElementById("fHigh").value.trim() || null,
     status: document.getElementById("fStatus").value,
     genre: document.getElementById("fGenre").value.trim() || null,
+    release_year: document.getElementById("fReleaseYear").value.trim() ? parseInt(document.getElementById("fReleaseYear").value.trim(), 10) : null,
     key_notes: document.getElementById("fKeyNotes").value.trim() || null,
     range_source: document.getElementById("fRangeSource").value || "manual",
     updated_at: new Date().toISOString()
@@ -2243,7 +2245,7 @@ document.getElementById("btnDeleteSetlist").onclick = async () => {
 async function fetchSetlistSongs(setlistId){
   try{
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/setlist_songs?setlist_id=eq.${setlistId}&select=id,song_id,position,songs(title,artist,status,low_note,high_note,in_karafun,key_notes,range_source,genre)&order=position.asc`,
+      `${SUPABASE_URL}/rest/v1/setlist_songs?setlist_id=eq.${setlistId}&select=id,song_id,position,songs(title,artist,status,low_note,high_note,in_karafun,key_notes,range_source,genre,release_year)&order=position.asc`,
       {headers: HEADERS}
     );
     if(!res.ok) throw new Error("Fetch failed");
@@ -2269,6 +2271,7 @@ async function fetchSetlistSongs(setlistId){
         key_notes: r.songs && r.songs.key_notes,
         range_source: r.songs && r.songs.range_source,
         genre: r.songs && r.songs.genre,
+        release_year: r.songs && r.songs.release_year,
         last_played: known ? known.last_played : null,
         last_venue: known ? known.last_venue : null
       };
