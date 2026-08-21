@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "65";
+const BUILD_VERSION = "66";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -2248,19 +2248,31 @@ async function fetchSetlistSongs(setlistId){
     );
     if(!res.ok) throw new Error("Fetch failed");
     const raw = await res.json();
-    currentSetlistSongs = raw.map(r => ({
-      id: r.id,
-      song_id: r.song_id,
-      title: (r.songs && r.songs.title) || "(song removed from songbook)",
-      artist: (r.songs && r.songs.artist) || "",
-      status: r.songs && r.songs.status,
-      low_note: r.songs && r.songs.low_note,
-      high_note: r.songs && r.songs.high_note,
-      in_karafun: r.songs && r.songs.in_karafun,
-      key_notes: r.songs && r.songs.key_notes,
-      range_source: r.songs && r.songs.range_source,
-      genre: r.songs && r.songs.genre
-    }));
+    // last_played/last_venue aren't columns on `songs` — fetchSongs()
+    // computes them by joining the performance log, and that's already
+    // loaded into the global `songs` array by the time any setlist is
+    // reachable (see the app bootstrap sequence). Reuse it here instead
+    // of re-querying performances, so a setlist card's "Last played…"
+    // line is guaranteed to match the Songbook card for the same song.
+    const byId = new Map(songs.map(s => [s.id, s]));
+    currentSetlistSongs = raw.map(r => {
+      const known = byId.get(r.song_id);
+      return {
+        id: r.id,
+        song_id: r.song_id,
+        title: (r.songs && r.songs.title) || "(song removed from songbook)",
+        artist: (r.songs && r.songs.artist) || "",
+        status: r.songs && r.songs.status,
+        low_note: r.songs && r.songs.low_note,
+        high_note: r.songs && r.songs.high_note,
+        in_karafun: r.songs && r.songs.in_karafun,
+        key_notes: r.songs && r.songs.key_notes,
+        range_source: r.songs && r.songs.range_source,
+        genre: r.songs && r.songs.genre,
+        last_played: known ? known.last_played : null,
+        last_venue: known ? known.last_venue : null
+      };
+    });
   }catch(err){
     currentSetlistSongs = [];
     showToast("Couldn't load setlist songs: " + err.message);
