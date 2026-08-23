@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0d0d0d">
-<link rel="stylesheet" href="styles.css?v=48">
+<link rel="stylesheet" href="styles.css?v=49">
 </head>
 <body>
 
@@ -280,7 +280,10 @@
   </div>
   <div class="field-row">
     <div class="field">
-      <label>GIG DATE</label>
+      <div class="field-label-row">
+        <label>GIG DATE</label>
+        <button type="button" class="field-quick-btn" id="btnSlDateToday">Today</button>
+      </div>
       <input type="date" id="slDate">
     </div>
     <div class="field">
@@ -288,6 +291,7 @@
       <input type="text" id="slVenue" placeholder="e.g. The Swiss">
     </div>
   </div>
+  <div id="slVenueRecent" class="venue-recent-chips" style="display:none;"></div>
   <div class="field">
     <label>NOTES</label>
     <input type="text" id="slNotes" placeholder="Anything worth remembering…">
@@ -598,6 +602,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=67"></script>
+<script src="app.js?v=68"></script>
 </body>
 </html>

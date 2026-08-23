@@ -376,6 +376,14 @@
   .range-mode-btn.active{border-color:var(--teal); color:var(--teal); background:rgba(61,218,215,0.1);}
   .field-row{display:flex; gap:10px;}
   .field-row .field{flex:1;}
+  .field-label-row{display:flex; align-items:center; justify-content:space-between;}
+  .field-quick-btn{
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:0.4px;
+    color:var(--teal); background:none; border:none; padding:0 0 5px; cursor:pointer;
+  }
+  .field-quick-btn:hover{color:var(--gold);}
+  .venue-recent-chips{display:flex; flex-wrap:wrap; gap:6px; margin:-6px 0 12px;}
+  .venue-recent-chips .chip{cursor:pointer;}
 
   .autocomplete-field{position:relative;}
   .autocomplete-list{

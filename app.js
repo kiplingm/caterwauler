@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "67";
+const BUILD_VERSION = "68";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -2171,6 +2171,38 @@ document.getElementById("btnAddToSetlistCreate").onclick = async () => {
   }
 };
 
+document.getElementById("btnSlDateToday").onclick = () => {
+  const d = new Date();
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  document.getElementById("slDate").value = local.toISOString().slice(0, 10);
+};
+
+// Quick-fill: surface venues from the user's own recent setlists (most
+// recent gig_date first, falling back to created_at) so a repeat gig at
+// the same bar is a single tap instead of retyping the venue name.
+function renderRecentVenueChips(){
+  const box = document.getElementById("slVenueRecent");
+  const seen = new Set();
+  const recent = [...setlists]
+    .sort((a, b) => new Date(b.gig_date || b.created_at || 0) - new Date(a.gig_date || a.created_at || 0))
+    .map(s => s.venue)
+    .filter(v => v && v.trim())
+    .filter(v => (seen.has(v) ? false : (seen.add(v), true)))
+    .slice(0, 6);
+
+  box.innerHTML = "";
+  if(!recent.length){ box.style.display = "none"; return; }
+  box.style.display = "flex";
+  recent.forEach(venue => {
+    const c = document.createElement("button");
+    c.type = "button";
+    c.className = "chip";
+    c.textContent = venue;
+    c.onclick = () => { document.getElementById("slVenue").value = venue; };
+    box.appendChild(c);
+  });
+}
+
 async function openSetlistDetail(id){
   currentSetlistId = id;
   document.getElementById("setlistEditId").value = id || "";
@@ -2187,6 +2219,8 @@ async function openSetlistDetail(id){
   document.getElementById("slAddSearch").value = "";
   slAddSearchTerm = "";
   document.getElementById("slAddResults").innerHTML = "";
+
+  renderRecentVenueChips();
 
   if(id){
     await fetchSetlistSongs(id);
