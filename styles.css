@@ -353,6 +353,30 @@
     color:var(--cream); font-family:'Inter',sans-serif; font-size:12.5px; font-weight:600; cursor:pointer;
   }
   .user-row-actions button.impersonate-btn{border-color:var(--gold); color:var(--gold);}
+  /* --- Report an issue (floating button + sheet) and admin Feedback list --- */
+  .report-fab{
+    position:fixed; left:16px; bottom:24px; width:38px; height:38px; border-radius:50%;
+    background:var(--bg-raised); color:var(--cream-dim); border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center; z-index:30; opacity:0.7; cursor:pointer;
+  }
+  .report-fab:active{opacity:1;}
+  .fb-filters{display:flex; gap:8px; margin-bottom:12px;}
+  .fb-filters select{
+    flex:1; background:var(--bg); border:1px solid var(--line); border-radius:9px; padding:9px 10px;
+    color:var(--cream); font-size:13px; font-family:'Inter',sans-serif;
+  }
+  .fb-row{padding:11px 12px; border:1px solid var(--line); border-radius:10px; margin-bottom:8px; background:var(--bg-raised);}
+  .fb-row-top{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--cream-dim);}
+  .fb-cat{font-size:9px; color:var(--gold); border:1px solid var(--gold); border-radius:4px; padding:1px 5px; text-transform:uppercase;}
+  .fb-cat.bug{color:var(--red); border-color:var(--red);}
+  .fb-msg{font-size:13.5px; color:var(--cream); margin:8px 0; white-space:pre-wrap; word-break:break-word;}
+  .fb-row-bottom{display:flex; align-items:center; gap:8px; font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--cream-dim);}
+  .fb-row-bottom .fb-who{flex:1; word-break:break-all;}
+  .fb-row-bottom select{
+    background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px 8px;
+    color:var(--cream); font-size:12px; font-family:'Inter',sans-serif;
+  }
+
   .settings-section-label{
     font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.6px; color:var(--teal);
     text-transform:uppercase; margin:18px 0 8px; padding-top:14px; border-top:1px solid var(--line);

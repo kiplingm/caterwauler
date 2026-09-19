@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0d0d0d">
-<link rel="stylesheet" href="styles.css?v=49">
+<link rel="stylesheet" href="styles.css?v=50">
 </head>
 <body>
 
@@ -138,6 +138,7 @@
 </div>
 
 <button class="fab" id="fabAdd">+</button>
+<button class="report-fab" id="reportFab" aria-label="Report an issue" title="Report an issue" style="display:none;"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M20 8h-2.81a5.98 5.98 0 0 0-1.82-1.96L17 4.41 15.59 3l-2.17 2.17a5.9 5.9 0 0 0-2.84 0L8.41 3 7 4.41l1.63 1.63A5.98 5.98 0 0 0 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81A6 6 0 0 0 12 22a6 6 0 0 0 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/></svg></button>
 
 <div class="sheet-backdrop" id="backdrop"></div>
 <div class="sheet" id="sheet">
@@ -429,6 +430,15 @@
     <button class="check-missing-btn" id="openUsersBtn">Manage users</button>
   </div>
 
+  <div class="settings-section-label">Feedback</div>
+  <div class="field">
+    <div class="artist" style="margin-bottom:10px;">
+      Usability reports filed from the bug button on any screen, including
+      ones filed while impersonating a tester.
+    </div>
+    <button class="check-missing-btn" id="openFeedbackBtn">Review reports</button>
+  </div>
+
   <div class="settings-section-label">Invites</div>
   <div class="field">
     <div class="artist" style="margin-bottom:10px;">
@@ -459,6 +469,54 @@
   <div id="usersListWrap"><div class="artist">Loading…</div></div>
   <div class="sheet-actions">
     <button class="btn-cancel" id="btnUsersClose" style="flex:1;">Done</button>
+  </div>
+</div>
+
+<div class="sheet-backdrop" id="feedbackBackdrop"></div>
+<div class="sheet sheet-large" id="feedbackSheet">
+  <h2>Feedback</h2>
+  <div class="fb-filters">
+    <select id="fbStatusFilter">
+      <option value="open" selected>Open</option>
+      <option value="triaged">Triaged</option>
+      <option value="fixed">Fixed</option>
+      <option value="wontfix">Won't fix</option>
+      <option value="">All statuses</option>
+    </select>
+    <select id="fbCategoryFilter">
+      <option value="">All categories</option>
+      <option value="bug">Bug</option>
+      <option value="ux">Confusing / UX</option>
+      <option value="idea">Idea</option>
+      <option value="general">Other</option>
+    </select>
+  </div>
+  <div id="feedbackListWrap"><div class="artist">Loading…</div></div>
+  <div class="sheet-actions">
+    <button class="btn-cancel" id="btnFeedbackClose" style="flex:1;">Done</button>
+  </div>
+</div>
+
+<div class="sheet-backdrop" id="reportBackdrop"></div>
+<div class="sheet" id="reportSheet">
+  <h2>Report an issue</h2>
+  <div class="field">
+    <label>WHAT KIND?</label>
+    <select id="reportCategory">
+      <option value="ux">Confusing / UX</option>
+      <option value="bug">Something's broken</option>
+      <option value="idea">Idea</option>
+      <option value="general">Other</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>WHAT HAPPENED?</label>
+    <textarea id="reportMessage" class="ask-claude-textarea" placeholder="What did you try, and what did you expect?"></textarea>
+  </div>
+  <div class="artist" id="reportContext" style="margin-bottom:10px;"></div>
+  <div class="sheet-actions">
+    <button class="btn-cancel" id="btnReportCancel">Cancel</button>
+    <button class="btn-save" id="btnReportSend">Send</button>
   </div>
 </div>
 
@@ -602,6 +660,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=68"></script>
+<script src="app.js?v=69"></script>
 </body>
 </html>

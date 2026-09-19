@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "68";
+const BUILD_VERSION = "69";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -2664,6 +2664,135 @@ document.getElementById("btnUsersClose").onclick = closeUsers;
 usersBackdrop.onclick = closeUsers;
 enableSwipeToDismiss(usersSheet, closeUsers);
 
+// --- Report an issue (floating bug button on every signed-in screen) ---
+// Impersonation mints a REAL session for the target user, so auth.uid() on
+// the insert is the tester account; the admin driving it (if any) comes
+// from the impersonation backup in sessionStorage and is stored alongside
+// so reports filed while testing as an alias can be traced back.
+const reportBackdrop = document.getElementById("reportBackdrop");
+const reportSheet = document.getElementById("reportSheet");
+function closeReport(){
+  reportBackdrop.classList.remove("open");
+  reportSheet.classList.remove("open");
+}
+function impersonatedByEmail(){
+  try{
+    const b = JSON.parse(sessionStorage.getItem("ss_impersonate_return") || "null");
+    return b && b.admin_email ? b.admin_email : null;
+  }catch(e){ return null; }
+}
+document.getElementById("reportFab").onclick = () => {
+  document.getElementById("reportMessage").value = "";
+  document.getElementById("reportCategory").value = "ux";
+  const screen = currentView === "singNow" ? "Sing Now" : currentView === "setlists" ? "Setlists" : "Songbook";
+  document.getElementById("reportContext").textContent =
+    `Screen: ${screen} · ${currentUserEmail || ""}` + (impersonatedByEmail() ? ` (via ${impersonatedByEmail()})` : "");
+  reportBackdrop.classList.add("open");
+  reportSheet.classList.add("open");
+};
+document.getElementById("btnReportCancel").onclick = closeReport;
+reportBackdrop.onclick = closeReport;
+enableSwipeToDismiss(reportSheet, closeReport);
+document.getElementById("btnReportSend").onclick = async () => {
+  const message = document.getElementById("reportMessage").value.trim();
+  if(!message){ showToast("Describe the issue first"); return; }
+  const btn = document.getElementById("btnReportSend");
+  btn.disabled = true;
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/feedback_reports`, {
+      method: "POST",
+      headers: { ...HEADERS, "Prefer": "return=minimal" },
+      body: JSON.stringify({
+        user_id: currentUserId,
+        reporter_email: currentUserEmail,
+        impersonated_by: impersonatedByEmail(),
+        path: currentView,
+        message,
+        category: document.getElementById("reportCategory").value,
+        user_agent: navigator.userAgent,
+        viewport: `${window.innerWidth}x${window.innerHeight}`
+      })
+    });
+    if(!res.ok) throw new Error("insert failed");
+    closeReport();
+    showToast("Thanks — report sent");
+  }catch(e){
+    showToast("Couldn't send — try again");
+  }finally{
+    btn.disabled = false;
+  }
+};
+
+// Admin triage list. RLS (feedback_admin_all) means a non-admin only ever
+// sees their own rows here, and the button is behind isAdmin regardless.
+const feedbackBackdrop = document.getElementById("feedbackBackdrop");
+const feedbackSheet = document.getElementById("feedbackSheet");
+function closeFeedback(){
+  feedbackBackdrop.classList.remove("open");
+  feedbackSheet.classList.remove("open");
+}
+document.getElementById("openFeedbackBtn").onclick = () => {
+  if(!isAdmin) return;
+  feedbackBackdrop.classList.add("open");
+  feedbackSheet.classList.add("open");
+  loadFeedbackList();
+};
+document.getElementById("btnFeedbackClose").onclick = closeFeedback;
+feedbackBackdrop.onclick = closeFeedback;
+enableSwipeToDismiss(feedbackSheet, closeFeedback);
+document.getElementById("fbStatusFilter").onchange = loadFeedbackList;
+document.getElementById("fbCategoryFilter").onchange = loadFeedbackList;
+
+async function loadFeedbackList(){
+  const wrap = document.getElementById("feedbackListWrap");
+  wrap.innerHTML = `<div class="artist">Loading…</div>`;
+  const status = document.getElementById("fbStatusFilter").value;
+  const category = document.getElementById("fbCategoryFilter").value;
+  let url = `${SUPABASE_URL}/rest/v1/feedback_reports?select=*&order=created_at.desc&limit=200`;
+  if(status) url += `&status=eq.${encodeURIComponent(status)}`;
+  if(category) url += `&category=eq.${encodeURIComponent(category)}`;
+  try{
+    const res = await fetch(url, { headers: HEADERS });
+    if(!res.ok) throw new Error("load failed");
+    const rows = await res.json();
+    if(!rows.length){
+      wrap.innerHTML = `<div class="artist">No reports match these filters.</div>`;
+      return;
+    }
+    const statusOpt = (r, v, label) => `<option value="${v}"${r.status === v ? " selected" : ""}>${label}</option>`;
+    wrap.innerHTML = rows.map(r => `
+      <div class="fb-row">
+        <div class="fb-row-top">
+          <span class="fb-cat ${escapeHtml(r.category)}">${escapeHtml(r.category)}</span>
+          <span>${escapeHtml(r.path)}</span>
+          <span style="margin-left:auto;">${escapeHtml(new Date(r.created_at).toLocaleString())}</span>
+        </div>
+        <div class="fb-msg">${escapeHtml(r.message)}</div>
+        <div class="fb-row-bottom">
+          <span class="fb-who">${escapeHtml(r.reporter_email || "unknown")}${r.impersonated_by ? escapeHtml(" (via " + r.impersonated_by + ")") : ""} · ${escapeHtml(r.viewport || "")}</span>
+          <select data-fb-id="${escapeHtml(r.id)}">
+            ${statusOpt(r,"open","Open")}${statusOpt(r,"triaged","Triaged")}${statusOpt(r,"fixed","Fixed")}${statusOpt(r,"wontfix","Won't fix")}
+          </select>
+        </div>
+      </div>
+    `).join("");
+    wrap.querySelectorAll("select[data-fb-id]").forEach(sel => {
+      sel.onchange = async () => {
+        try{
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/feedback_reports?id=eq.${encodeURIComponent(sel.dataset.fbId)}`, {
+            method: "PATCH", headers: { ...HEADERS, "Prefer": "return=minimal" },
+            body: JSON.stringify({ status: sel.value })
+          });
+          if(!r.ok) throw new Error("update failed");
+          showToast("Status updated");
+        }catch(e){ showToast("Couldn't update status"); }
+      };
+    });
+  }catch(e){
+    wrap.innerHTML = `<div class="artist">Couldn't load reports. Try closing and reopening.</div>`;
+  }
+}
+
 // --- Friends screen (own top-level sheet — this is a mainstream social
 // feature, not app configuration, so it doesn't belong buried in
 // Settings) -----------------------------------------------------------
@@ -3593,6 +3722,7 @@ const authBackdrop = document.getElementById("authBackdrop");
 const authSheet = document.getElementById("authSheet");
 let signedIn = false;
 let currentUserEmail = null;
+let currentUserId = null;
 let isAdmin = false;
 let currentUsername = null;
 
@@ -3607,6 +3737,8 @@ async function onSignedIn(session){
   const emailEl = document.getElementById("accountEmail");
   if(emailEl) emailEl.textContent = session.user.email;
   currentUserEmail = session.user.email;
+  currentUserId = session.user.id;
+  document.getElementById("reportFab").style.display = "";
   initImpersonationBanner();
   updateFriendsBadge();
 
