@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "69";
+const BUILD_VERSION = "70";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -3832,7 +3832,7 @@ function friendlyAuthError(error){
     return "Too many tries in a row — wait a minute before requesting another code.";
   }
   if(lower.includes("expired") || lower.includes("invalid") && lower.includes("token")){
-    return "That code is wrong or expired. Double-check the 6 digits, or request a new one.";
+    return "That code is wrong or expired. Double-check the digits, or request a new one.";
   }
   if(lower.includes("invalid") && lower.includes("email")){
     return "That doesn't look like a valid email address.";
@@ -3890,7 +3890,8 @@ document.getElementById("authSendBtn").onclick = async () => {
 // Fallback for the case where tapping the emailed link doesn't land in the
 // same browser/Home-Screen-icon instance that requested it (a known iOS
 // quirk: taps always open regular Safari, not a specific standalone web
-// app instance). Supabase's default OTP email includes a 6-digit code
+// app instance). The OTP email includes a numeric code (length is whatever
+// Supabase's project Auth settings currently issue — don't assume 6)
 // alongside the link — verifying it directly here sidesteps the redirect
 // entirely and completes sign-in in whichever instance you're actually in.
 document.getElementById("authVerifyCodeBtn").onclick = async () => {

@@ -19,7 +19,7 @@ for the data model and `docs/SONG_CARD_STANDARD.md` before touching any song car
 1. `node --check app.js`
 2. `node tests.js` — all tests must pass (currently 47; tests extract pure functions from
    `app.js` source, so they exercise what actually ships)
-3. Bump `BUILD_VERSION` in `app.js` (currently "69")
+3. Bump `BUILD_VERSION` in `app.js` (currently "70")
 4. Bump the cache-bust params in `index.html`: `app.js?v=N` and `styles.css?v=N`
    (bump the CSS one whenever `styles.css` changed; they are independent numbers)
 Commit messages follow "Build N: what changed and why". Git identity for commits:
@@ -61,6 +61,18 @@ Never put tokens, keys, or PATs in the repo, in commit messages, or in this file
 - Lead with your recommendation. He's often on a phone, so keep summaries short and concrete.
 
 ## Where things stand (re-verify against git log)
+- Build 70 fixed a real sign-in bug (the OTP code field was capped at `maxlength="6"` and labeled
+  "6-DIGIT CODE" while Supabase's project Auth settings actually issue 8-digit codes — confirmed
+  against emails going back to at least 2026-08-16, so the code fallback has silently never worked)
+  and added a desktop/wide-viewport max-width layout (main content + all `.sheet`s, `min-width:820px`)
+  after a heuristic usability review of the live app. Two of the review's other flagged issues
+  (FAB supposedly hiding the last row of Songbook/Setlists; filter-chip row supposedly having no
+  scroll-fade affordance) did not reproduce on direct verification and were left alone — the FAB
+  clears the last row by design (108px combined bottom padding vs. an 80px FAB footprint), and the
+  fade mask on `.filter-chips` already exists and works. A third flagged issue (Recommendations not
+  showing which tier produced a suggestion) also didn't hold up — `.rec-item-source` already shows a
+  specific per-row reason (e.g. "Because you're solid on X", "Similar to Y (Last.fm)"), which is
+  more informative than a generic tier tag. Only genuinely fix what you've verified reproduces.
 - Build 69 added the floating "Report an issue" button (bottom-left) and Admin → Feedback triage
   sheet, backed by the `feedback_reports` table.
 - Open manual Supabase dashboard steps: add the Pages URL to Auth redirect URLs; update the

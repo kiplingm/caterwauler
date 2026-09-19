@@ -126,7 +126,10 @@ after a deploy, silently undoing whatever just shipped.
   to Supabase Dashboard → Authentication → URL Configuration → Redirect
   URLs (repo/Pages URL renamed from setlist-sherpa in build 51). Until
   this is added, magic-link email redirects may fail on the new URL —
-  the 6-digit code fallback still works regardless.
+  the emailed code fallback still works regardless (the auth code field
+  accepts up to 10 digits — Supabase's project Auth settings currently
+  issue 8, not the 6 originally assumed; found and fixed 2026-09-19 after
+  it silently broke sign-in via the fallback path entirely).
 - **Manual step needed**: paste the updated Magic Link email template
   (Caterwauler branding + Add-to-Home-Screen blurb) into Supabase
   Dashboard → Authentication → Email Templates → Magic Link. Draft was
