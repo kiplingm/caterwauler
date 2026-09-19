@@ -1,0 +1,70 @@
+# Caterwauler — notes for Claude Code
+
+Karaoke/vocal songbook web app. Solo developer (Kipling, GitHub `kiplingm`) plus a small
+invite-only group of testers. Live at https://kiplingm.github.io/caterwauler/. Read `README.md`
+for the data model and `docs/SONG_CARD_STANDARD.md` before touching any song card.
+
+## Stack (no build step — keep it that way)
+- Vanilla JS / HTML / CSS: `index.html`, `styles.css`, `app.js`. No bundler, no framework, no npm deps.
+- Backend: Supabase (Postgres + RLS + Edge Functions), project ID `luykkuptcizkdigwness`.
+- Hosting: GitHub Pages, deployed from `main`. Pushing to `main` is a production deploy.
+- Data calls are plain `fetch()` against `${SUPABASE_URL}/rest/v1/...` with the shared `HEADERS`
+  object (its Authorization is swapped to the user's session token in `onSignedIn()`).
+  `authClient` (supabase-js) is used only for sign-in/session management. Follow that split.
+- The UI is themed with CSS variables (`--bg`, `--bg-raised`, `--line`, `--cream`, `--gold`,
+  `--teal`, `--red`, …) across four themes. Never hardcode colors. Overlays use the existing
+  `.sheet` / `.sheet-backdrop` pattern plus `enableSwipeToDismiss()`.
+
+## Pre-commit checklist — every build, no exceptions
+1. `node --check app.js`
+2. `node tests.js` — all tests must pass (currently 47; tests extract pure functions from
+   `app.js` source, so they exercise what actually ships)
+3. Bump `BUILD_VERSION` in `app.js` (currently "69")
+4. Bump the cache-bust params in `index.html`: `app.js?v=N` and `styles.css?v=N`
+   (bump the CSS one whenever `styles.css` changed; they are independent numbers)
+Commit messages follow "Build N: what changed and why". Git identity for commits:
+`user.name "kiplingm"`, `user.email "kiplingm@users.noreply.github.com"`.
+Never put tokens, keys, or PATs in the repo, in commit messages, or in this file.
+
+## Architecture rules that were learned the hard way
+- **Song cards:** every song card is rendered by `buildSongCardHtml()` and wired by
+  `wireSongCardEvents()`. Never hand-roll a card template in a view. View-specific controls go
+  outside the card as a sibling (see `.sl-song-row-wrap` / `.sl-song-controls`).
+- **CSS class names are global.** Generic names get reused by unrelated buttons and break
+  silently (`.rec-add-btn` / `.rec-dismiss-btn` did — the rec card actions are now
+  `.rec-add-action` / `.rec-dismiss-action`). Grep for a class before reusing or renaming it.
+- **Impersonation is a real session.** The `admin-impersonate` Edge Function mints a genuine
+  session for the tester, so `auth.uid()` IS the tester. The admin's own session is stashed in
+  `sessionStorage` key `ss_impersonate_return` (`admin_email` identifies who is driving).
+  Don't build features that assume "effective user" differs from `auth.uid()`.
+- **Admin gating:** `isAdmin` comes from `profiles.is_admin`; UI is hidden behind it, but real
+  enforcement is RLS. Never rely on the hidden button alone.
+- Edge Functions (`admin-impersonate`, `admin-list-users`, `admin-view-as`, `similar-artists`)
+  are not in this repo; they are deployed directly to Supabase.
+
+## Database changes
+- This repo has no migrations folder. Schema changes are applied to Supabase as migrations
+  (`apply_migration`), not ad-hoc SQL. If you have no Supabase access in your session, do NOT
+  guess at the schema: write the SQL you need into your PR description or a file under `docs/`
+  and flag it for Kipling to apply before the frontend change ships.
+- A frontend change that needs a new column/table must not go to `main` before that migration
+  is applied, or the feature will fail for real users.
+- Supabase gotchas: a trigger inserting into an RLS-enabled table with no policies silently rolls
+  back the whole transaction (use `SECURITY DEFINER`); RLS pattern is separate
+  select/insert/delete policies on `auth.uid() = user_id`; when a function's return signature
+  changes, drop it in a separate migration first.
+
+## Working style
+- Kipling's messages are terse ("Continue", "Do all", "Yes"). He prefers autonomous execution
+  over back-and-forth, and reverses decisions quickly when something doesn't work in practice.
+- Mockups are wanted before UX/layout changes; skip them for mechanical refactors and audits.
+- Lead with your recommendation. He's often on a phone, so keep summaries short and concrete.
+
+## Where things stand (re-verify against git log)
+- Build 69 added the floating "Report an issue" button (bottom-left) and Admin → Feedback triage
+  sheet, backed by the `feedback_reports` table.
+- Open manual Supabase dashboard steps: add the Pages URL to Auth redirect URLs; update the
+  Magic Link email template.
+- Pending: hero banner and wordmark graphics (Kipling generates in Adobe Firefly and supplies
+  the files; wordmark goes in `index.html` first, then the tutorial slide, then the login sheet).
+- Pending: song "theme" reference data (paused, needs scoping), more vocal-range research batches.
