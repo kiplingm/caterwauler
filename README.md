@@ -42,11 +42,25 @@ writes this database going forward.
   newly-named one (`openAddToSetlist` in `app.js`). Reordering
   re-numbers every row's `position` rather than patching just the two
   swapped rows, since positions can develop gaps after a song is removed.
+- The Setlists tab (`renderSetlistsList`) splits into **Upcoming**
+  (`gig_date` today-or-later, ascending; undated/reusable lists included,
+  sorted last within the group) and **Past** (visually de-emphasized) via
+  `splitSetlistsByGigDate`. Tapping a setlist opens **Perform mode**
+  (`openPerformView`/`renderPerformSongs`) by default — a read-mostly view
+  with a "Mark as sung" button per song (logs to `performances`, same shape
+  as manual logging, dated today and defaulting to the setlist's venue) and
+  no reorder/remove controls. The full planning sheet (`openSetlistDetail`
+  — reorder, add/remove songs, gig date/venue/notes) is reachable via an
+  Edit button on each row or inside Perform itself. Both views show a
+  readiness banner (`computeReadinessBannerHtml`) when the gig is within 14
+  days and any song in it isn't yet Solid.
 - Uses Supabase's newer **publishable key** (`sb_publishable_...`), not
   the legacy anon key.
 
 ## Recommendations
-The Recs sheet (✨) searches `karafun_catalog` for songs by artists related
+The Recs tab (`loadRecommendations` in `app.js` — a view-switcher tab, not
+a sheet, since promoting it out from behind a header icon in build 71)
+searches `karafun_catalog` for songs by artists related
 to your Solid songs, gates every candidate on vocal range via
 `song_ranges`, and groups results into in-range / would-need-a-key-change
 / range-unconfirmed. Seed artists come from three tiers (`buildSeedArtists`
@@ -137,12 +151,12 @@ after a deploy, silently undoing whatever just shipped.
 - Shazam-style song ID: let a user record/hum a snippet (or point at a
   live speaker) to identify a song and jump straight to adding/rating it
   in the songbook, instead of manual search entry.
-- Recs sheet (`openRecommendations` in `app.js`) still does the old
+- Recs tab (`loadRecommendations` in `app.js`) still does the old
   sequential-ish chunked candidate search against `karafun_catalog` for
   *new* song suggestions — this is a live search so it wasn't touched by
   the `in_karafun` trigger work, but it'd benefit from the same
   Promise.all-parallelized chunking pattern used in the old
-  `fetchKarafunMatches` if opening the Recs sheet ever feels slow.
+  `fetchKarafunMatches` if opening the Recs tab ever feels slow.
 - Add an index on `songs.user_id` if the table grows a lot — fine at
   current scale (~200 rows total across users) but not indexed today.
 - Once on the Dell XPS: revisit the parked automated vocal-range

@@ -1,8 +1,8 @@
 # Song Card Standard
 
 Every place a song appears as a card in the UI — a **saved song** (a row from the `songs`
-table) in Songbook, Sing Now, or a Setlist, or an **unsaved candidate** in Recommendations —
-must be rendered by `buildSongCardHtml()` in `app.js`, and wired up by
+table) in Songbook or a Setlist (its Edit or Perform view), or an **unsaved candidate** in
+Recommendations — must be rendered by `buildSongCardHtml()` in `app.js`, and wired up by
 `wireSongCardEvents()`. Do not hand-write a new `<div class="card">...` template. This is
 what kept drifting before — Setlists and Recommendations each grew their own
 slightly-different lookalike over time, styled and structured just differently enough to
@@ -37,22 +37,22 @@ extension points instead of a parallel template:
 | Option | Use it for |
 |---|---|
 | `cardKey` | Expand-state/DOM-lookup key, when it must differ from `song.id` — e.g. Setlists key on the `setlist_songs` row id (duplicate songs in one list), Recommendations key on a `"title\|artist"` string (no id exists yet). |
-| `extraClasses` | View-specific class on the outer `.card`, e.g. `sing-now-card`, `sl-song-row`, `rec-item`. |
+| `extraClasses` | View-specific class on the outer `.card`, e.g. `sl-song-row`, `rec-item`. |
 | `contentClass` | View-specific class on `.card-content`, for padding tweaks. |
 | `leadingHead` | Extra markup at the start of the head row, e.g. a setlist position number. |
 | `headExtra` | Extra markup in the head's right side, before the chevron — alongside or instead of the status pill, e.g. a recommendation's fit badge. |
 | `bodyPrefix` | Extra markup at the top of the body, before the range info, e.g. a recommendation's source label ("By Ed Sheeran" / genre match). |
 | `bodyActions` | Override the default Performances/+Setlist/Edit block with different action buttons — for candidates that aren't saved songs yet, e.g. a recommendation's Add/Dismiss. Pass raw HTML; `null` (default) keeps the standard actions when `song.id` is set. |
-| `keyNotes` | Pass `null` to suppress (Sing Now hides key notes to keep picks terse). |
+| `keyNotes` | Pass `null` to suppress a card's key notes. |
 | `showLastPlayed` | Set `false` to hide the last-played line. |
-| `footer` | Always-visible content below the body, inside the card, outside the expand gate. Not currently used by any caller — Setlist's move/remove controls turned out to belong *outside* the card entirely (see below), not just outside the expand gate, so they're a sibling in `.sl-song-row-wrap` instead. Kept as an option for a future case where something genuinely belongs inside the card but outside the body. |
+| `footer` | Always-visible content below the body, inside the card, outside the expand gate. Used by Setlists' Perform view for its single "Mark as sung" button — the future case this option was kept for: something that genuinely belongs inside the card but outside the body, as opposed to Edit's move/remove controls, which turned out to belong *outside* the card entirely (see below). |
 
 Call `wireSongCardEvents(container, refresh)` once per render, right after setting
 `container.innerHTML`, where `refresh` is whatever re-renders *that view* after a status
-edit closes. Songbook and Sing Now pass the default (`render()`, the top-level view
-dispatcher). Setlists passes `() => fetchSetlistSongs(currentSetlistId)`, because a
-setlist's song sheet keeps its own local copy of song data (`currentSetlistSongs`)
-separate from the main `songs` array.
+edit closes. Songbook passes the default (`render()`, the top-level view dispatcher).
+Setlists (both Edit and Perform) passes `() => fetchSetlistSongs(currentSetlistId)` (then,
+for Perform, a re-render — see `renderPerformSongs`), because a setlist's song sheet keeps
+its own local copy of song data (`currentSetlistSongs`) separate from the main `songs` array.
 
 ## When you need something a song card doesn't do
 
@@ -74,7 +74,7 @@ recommendation candidate:
   it should become a `buildSongCardHtml()` call with its own `bodyActions`/`bodyPrefix`,
   the same way recommendation candidates are.
 
-Recommendation candidates (`.rec-item` in the Recommendations sheet) *are* built from
+Recommendation candidates (`.rec-item` in the Recommendations tab) *are* built from
 `buildSongCardHtml()` — they're not saved songs, so they have no `song.id`/status, but
 they use `headExtra` for the fit badge, `bodyPrefix` for the source label, and
 `bodyActions` for Add/Dismiss in place of Performances/+Setlist/Edit. This used to be a
@@ -90,5 +90,5 @@ a parallel `.rec-item` template if it needs to change; extend `buildSongCardHtml
   `buildSongCardHtml()`.
 - `toggleCardExpand(id)` / `expandedCardIds` — app.js, unchanged, shared by all callers
   (including recommendation candidates, keyed by `"title|artist"` instead of a DB id).
-- Callers: `renderSongbook()`, `renderSingNow()`, `renderSetlistSongs()`,
-  `renderRecommendations()`.
+- Callers: `renderSongbook()`, `renderSetlistSongs()` (Edit), `renderPerformSongs()`
+  (Perform), `renderRecommendations()`.

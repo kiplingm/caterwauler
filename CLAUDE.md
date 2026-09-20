@@ -19,7 +19,7 @@ for the data model and `docs/SONG_CARD_STANDARD.md` before touching any song car
 1. `node --check app.js`
 2. `node tests.js` — all tests must pass (currently 47; tests extract pure functions from
    `app.js` source, so they exercise what actually ships)
-3. Bump `BUILD_VERSION` in `app.js` (currently "70")
+3. Bump `BUILD_VERSION` in `app.js` (currently "73")
 4. Bump the cache-bust params in `index.html`: `app.js?v=N` and `styles.css?v=N`
    (bump the CSS one whenever `styles.css` changed; they are independent numbers)
 Commit messages follow "Build N: what changed and why". Git identity for commits:
@@ -61,6 +61,34 @@ Never put tokens, keys, or PATs in the repo, in commit messages, or in this file
 - Lead with your recommendation. He's often on a phone, so keep summaries short and concrete.
 
 ## Where things stand (re-verify against git log)
+- Builds 71-73 restructured the app's IA after a strategic (not just heuristic) UX review found
+  the nav's visual hierarchy didn't match the product's actual feature hierarchy:
+  - **Build 71**: merged the standalone "Sing Now" view into Songbook's own "Best fit" sort
+    (`pickSingNowSongs` -> `bestFitScore`, applied to every status, not just Solid — non-Solid
+    songs mostly have no performance history so they degrade gracefully to ~the old fit-only
+    order) and promoted Recommendations from a header icon + bottom sheet into the freed tab
+    slot as a real inline view. View order is now Songbook / Setlists / Recs, Songbook is the
+    default/landing view. Also dropped "Test" (the internal marker for unvetted Recommendation
+    candidates) from both manual status pickers (`#fStatus`, the inline per-card status editor)
+    via `MANUAL_STATUS_OPTIONS` — grandfathers the current value back in via `populateStatusSelect`
+    when a song is already Test, so opening the editor on one doesn't silently blank its status
+    to `""` on save.
+  - **Build 72**: added Perform mode — tapping a setlist opens a read-mostly view (no reorder/
+    remove controls) with a big "Mark as sung" button per song (`buildSongCardHtml`'s `footer`
+    extension point, now actually used — see `docs/SONG_CARD_STANDARD.md`), logging to
+    `performances` the same way manual logging does. Edit (the old full sheet: reorder, add/
+    remove songs, gig date/venue) is still one tap away via a dedicated row button or a button
+    inside Perform. Also added `computeReadinessBannerHtml`: setlists with a gig date within 14
+    days (including overdue) and any non-Solid song get a warning banner, shown in both Edit and
+    Perform.
+  - **Build 73**: split the Setlists tab into Upcoming (gig date today-or-later, ascending;
+    undated/reusable lists included, sorted last within the group) and Past (visually
+    de-emphasized, `.setlist-past-group{opacity:0.6}`) via `splitSetlistsByGigDate` — the tab
+    read as a history log before this, not a planner.
+  - All three verified live against the real account (kiplingm@gmail.com), not just code-reviewed
+    — see each build's commit message for exactly what was checked. tests.js is at 59 (was 47
+    before Build 71; `pickSingNowSongs`'s tests were replaced by `bestFitScore` ones, plus new
+    coverage for `computeReadinessBannerHtml` and `splitSetlistsByGigDate`).
 - Build 70 fixed a real sign-in bug (the OTP code field was capped at `maxlength="6"` and labeled
   "6-DIGIT CODE" while Supabase's project Auth settings actually issue 8-digit codes — confirmed
   against emails going back to at least 2026-08-16, so the code fallback has silently never worked)
