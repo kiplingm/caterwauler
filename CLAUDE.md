@@ -17,9 +17,12 @@ for the data model and `docs/SONG_CARD_STANDARD.md` before touching any song car
 
 ## Pre-commit checklist — every build, no exceptions
 1. `node --check app.js`
-2. `node tests.js` — all tests must pass (currently 47; tests extract pure functions from
+2. `node tests.js` — all tests must pass (currently 59; tests extract pure functions from
    `app.js` source, so they exercise what actually ships)
-3. Bump `BUILD_VERSION` in `app.js` (currently "76")
+3. Bump `BUILD_VERSION` **and** `BUILD_DATE` in `app.js` (currently "77" / 2026-09-20 —
+   `BUILD_DATE` sat wrong/stale at 2026-08-08 through builds 69-75 because nothing forced
+   updating it; it's cosmetic, not consumed anywhere except the Settings screen's build-info
+   line, but a wrong date there is exactly the kind of thing a tester notices and flags)
 4. Bump the cache-bust params in `index.html`: `app.js?v=N` and `styles.css?v=N`
    (bump the CSS one whenever `styles.css` changed; they are independent numbers)
 Commit messages follow "Build N: what changed and why". Git identity for commits:

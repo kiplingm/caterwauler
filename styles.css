@@ -170,18 +170,30 @@
     background:transparent; white-space:nowrap;
   }
   .chip.active{border-color:var(--gold); color:var(--gold); background:rgba(232,183,78,0.08);}
-  /* Per-status active colors, matching the .status-X pill each chip filters
-     for (see line ~236 below) instead of every chip going uniformly gold.
-     .chip-maybe is intentionally the same gold as the .chip.active default. */
-  .chip-solid.active{border-color:var(--green); color:var(--green); background:rgba(111,191,115,0.1);}
-  .chip-learning.active{border-color:var(--teal); color:var(--teal); background:rgba(61,218,215,0.1);}
-  .chip-suggested.active{border-color:var(--cream-dim); color:var(--cream-dim); background:rgba(182,169,154,0.14);}
-  .chip-retired.active{border-color:var(--red); color:var(--red); background:rgba(232,97,90,0.1);}
-  .chip-test.active{border-color:var(--purple); color:var(--purple); background:rgba(180,140,255,0.1);}
+  /* Color-coded at rest too, matching the .status-X pill each chip filters
+     for (see line ~236 below) — not just when active — so the row reads as
+     "these are the six statuses" at a glance, the same way status pills on
+     a song card are always tinted rather than only when "selected." Active
+     state (below) is the same hue at full saturation with a filled
+     background, so it's still clear which filters are actually applied.
+     .chip-maybe's resting/active colors intentionally match .chip's own
+     gold default. */
+  .chip-solid{color:var(--green); border-color:rgba(111,191,115,0.4);}
+  .chip-learning{color:var(--teal); border-color:rgba(61,218,215,0.4);}
+  .chip-maybe{color:var(--gold); border-color:rgba(232,183,78,0.4);}
+  .chip-suggested{color:var(--cream-dim); border-color:var(--line);}
+  .chip-retired{color:var(--red); border-color:rgba(232,97,90,0.4);}
+  .chip-test{color:var(--purple); border-color:rgba(180,140,255,0.4);}
+  .chip-solid.active{border-color:var(--green); background:rgba(111,191,115,0.1);}
+  .chip-learning.active{border-color:var(--teal); background:rgba(61,218,215,0.1);}
+  .chip-suggested.active{border-color:var(--cream-dim); background:rgba(182,169,154,0.14);}
+  .chip-retired.active{border-color:var(--red); background:rgba(232,97,90,0.1);}
+  .chip-test.active{border-color:var(--purple); background:rgba(180,140,255,0.1);}
   /* A brighter tint of .karafun-badge's brand pink (#D5167A) below — used
      as-is it's too dark/muted against this background to read at chip
-     text size, unlike the light/pastel tones the other active chips use. */
-  .chip-karafun.active{border-color:#ff4fa8; color:#ff4fa8; background:rgba(255,79,168,0.12);}
+     text size, unlike the light/pastel tones the other chip colors use. */
+  .chip-karafun{color:#ff4fa8; border-color:rgba(255,79,168,0.4);}
+  .chip-karafun.active{border-color:#ff4fa8; background:rgba(255,79,168,0.12);}
 
   .count-row{padding:10px 18px 10px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cream-dim); border-bottom:1px solid var(--line);}
 
