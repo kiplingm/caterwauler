@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "71";
+const BUILD_VERSION = "72";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -1920,6 +1920,8 @@ async function dismissRecommendation(rec, itemEl){
 // --- Setlists: named, ordered song lists optionally tied to a gig date/venue ---
 const setlistDetailSheet = document.getElementById("setlistDetailSheet");
 const setlistDetailBackdrop = document.getElementById("setlistDetailBackdrop");
+const performSheet = document.getElementById("performSheet");
+const performBackdrop = document.getElementById("performBackdrop");
 
 let setlists = [];
 let currentSetlistId = null;
@@ -1968,6 +1970,7 @@ function renderSetlistsList(){
           <div class="setlist-item-meta">${escapeHtml(metaParts.join(" · "))}</div>
         </div>
         <div class="setlist-item-actions">
+          <button class="rec-dismiss-btn setlist-edit-btn" data-id="${sl.id}">Edit</button>
           <button class="rec-dismiss-btn setlist-dup-btn" data-id="${sl.id}">Duplicate</button>
           <button class="rec-dismiss-btn setlist-delete-btn" data-id="${sl.id}">Delete</button>
         </div>
@@ -1975,11 +1978,18 @@ function renderSetlistsList(){
     `;
   }).join("");
 
+  // Tapping a setlist opens Perform mode (read-mostly, mark-as-sung) as the
+  // primary action — planning/reordering lives behind the explicit Edit
+  // button instead, so there's no risk of bumping a reorder/remove control
+  // by accident while actually using the setlist live.
   listEl.querySelectorAll(".setlist-item").forEach(el=>{
     el.onclick = (e) => {
-      if(e.target.closest(".setlist-delete-btn") || e.target.closest(".setlist-dup-btn")) return;
-      openSetlistDetail(el.dataset.id);
+      if(e.target.closest(".setlist-delete-btn") || e.target.closest(".setlist-dup-btn") || e.target.closest(".setlist-edit-btn")) return;
+      openPerformView(el.dataset.id);
     };
+  });
+  listEl.querySelectorAll(".setlist-edit-btn").forEach(b=>{
+    b.onclick = (e) => { e.stopPropagation(); openSetlistDetail(b.dataset.id); };
   });
   listEl.querySelectorAll(".setlist-dup-btn").forEach(b=>{
     b.onclick = (e) => { e.stopPropagation(); duplicateSetlist(b.dataset.id); };
@@ -2282,8 +2292,29 @@ async function fetchSetlistSongs(setlistId){
   renderSetlistSongs();
 }
 
+// A setlist "coming up soon" (gig date within this many days — including
+// today or already overdue, so a stale unrun gig still warns) with any
+// song that isn't yet Solid gets a readiness banner in both the Edit and
+// Perform views. Pure/testable on purpose, like bestFitScore above.
+const READINESS_WINDOW_DAYS = 14;
+
+function computeReadinessBannerHtml(setlist, setlistSongs, now){
+  now = now || new Date();
+  if(!setlist || !setlist.gig_date || !setlistSongs || setlistSongs.length === 0) return "";
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const gigDate = new Date(setlist.gig_date + "T00:00:00");
+  const daysUntil = Math.round((gigDate - today) / 86400000);
+  if(daysUntil > READINESS_WINDOW_DAYS) return "";
+  const notSolid = setlistSongs.filter(s => s.status !== "Solid").length;
+  if(notSolid === 0) return "";
+  return `<div class="readiness-banner">${notSolid} of ${setlistSongs.length} song${setlistSongs.length===1?"":"s"} ${notSolid===1?"isn't":"aren't"} marked Solid yet.</div>`;
+}
+
 function renderSetlistSongs(){
   const listEl = document.getElementById("setlistSongsList");
+  const bannerEl = document.getElementById("editReadinessBanner");
+  if(bannerEl) bannerEl.innerHTML = computeReadinessBannerHtml(setlists.find(s => s.id === currentSetlistId), currentSetlistSongs);
   if(currentSetlistSongs.length === 0){
     listEl.innerHTML = `<div class="empty" style="padding:16px 4px;">No songs yet — search below to add some.</div>`;
     return;
@@ -2357,6 +2388,104 @@ async function removeSetlistSong(id){
     if(!res.ok) throw new Error("Remove failed");
     currentSetlistSongs = currentSetlistSongs.filter(s => s.id !== id);
     renderSetlistSongs();
+  }catch(err){
+    showToast("Error: " + err.message);
+  }
+}
+
+// --- Perform mode: a read-mostly view over a setlist's songs for actually
+// using it live, as opposed to Edit's reorder/remove/add-songs planning
+// tools. Tapping a setlist row opens this by default (see
+// renderSetlistsList) — Edit stays one tap away via its own button on the
+// row, or "Edit setlist" inside this sheet. Shares currentSetlistId /
+// currentSetlistSongs / fetchSetlistSongs() with Edit; only one of the two
+// sheets is ever open at a time, so that's safe.
+function closePerformView(){
+  performBackdrop.classList.remove("open");
+  performSheet.classList.remove("open");
+}
+
+async function openPerformView(id){
+  currentSetlistId = id;
+  const sl = setlists.find(s => s.id === id);
+  document.getElementById("performTitle").textContent = sl ? sl.name : "Perform";
+  const metaEl = document.getElementById("performMeta");
+  const metaParts = [];
+  if(sl && sl.gig_date) metaParts.push(formatDate(sl.gig_date));
+  if(sl && sl.venue) metaParts.push(sl.venue);
+  metaEl.textContent = metaParts.join(" · ");
+  metaEl.style.display = metaParts.length ? "block" : "none";
+
+  performBackdrop.classList.add("open");
+  performSheet.classList.add("open");
+  document.getElementById("performSongsList").innerHTML = `<div class="loading">Loading songs…</div>`;
+  await fetchSetlistSongs(id); // also renders the (hidden) Edit list — harmless
+  renderPerformSongs();
+}
+
+document.getElementById("btnPerformClose").onclick = closePerformView;
+document.getElementById("btnPerformEdit").onclick = () => {
+  closePerformView();
+  openSetlistDetail(currentSetlistId);
+};
+performBackdrop.onclick = closePerformView;
+
+function renderPerformSongs(){
+  const listEl = document.getElementById("performSongsList");
+  const bannerEl = document.getElementById("performReadinessBanner");
+  bannerEl.innerHTML = computeReadinessBannerHtml(setlists.find(s => s.id === currentSetlistId), currentSetlistSongs);
+
+  if(currentSetlistSongs.length === 0){
+    listEl.innerHTML = `<div class="empty" style="padding:16px 4px;">No songs in this setlist yet — add some from Edit.</div>`;
+    return;
+  }
+  // Same buildSongCardHtml() as everywhere else (see docs/SONG_CARD_STANDARD.md)
+  // — no reorder/remove controls here, that's Edit's job. The one action
+  // this view adds lives in `footer`, a full-width button below the card's
+  // own Performances/+Setlist/Edit row, not a replacement for it.
+  listEl.innerHTML = currentSetlistSongs.map((s, i) => buildSongCardHtml(
+    {...s, id: s.song_id},
+    {
+      cardKey: s.id,
+      leadingHead: `<div class="sl-song-num">${i+1}</div>`,
+      footer: `<button class="perform-mark-btn" data-id="${s.id}">✓ Mark as sung</button>`
+    }
+  )).join("");
+
+  wireSongCardEvents(listEl, () => fetchSetlistSongs(currentSetlistId).then(renderPerformSongs));
+  listEl.querySelectorAll(".perform-mark-btn").forEach(b=>{
+    b.onclick = (e) => { e.stopPropagation(); markSongAsSung(b.dataset.id); };
+  });
+}
+
+// Logs a performance the same way the manual "+Add performance" flow does
+// (same table, same payload shape — see btnLogSave above), dated today and
+// defaulting to the setlist's own venue, so a live "next song" tap doesn't
+// require filling out a form mid-gig.
+async function markSongAsSung(setlistSongRowId){
+  const row = currentSetlistSongs.find(s => s.id === setlistSongRowId);
+  if(!row) return;
+  const sl = setlists.find(s => s.id === currentSetlistId);
+  const today = new Date();
+  const localDate = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/performances`, {
+      method: "POST", headers: {...HEADERS, "Prefer": "return=minimal"},
+      body: JSON.stringify({
+        song_id: row.song_id,
+        performance_date: localDate,
+        venue: (sl && sl.venue) || null,
+        crowd_response: null,
+        notes: null
+      })
+    });
+    if(!res.ok) throw new Error("Log failed");
+    row.last_played = localDate;
+    row.last_venue = (sl && sl.venue) || null;
+    showToast(`Logged "${row.title}"`);
+    venueHistory = null; // invalidate venue cache, same as the manual log flow
+    renderPerformSongs();
+    fetchSongs(); // keeps the global songs array's last_played in sync (Best fit sort, Songbook cards)
   }catch(err){
     showToast("Error: " + err.message);
   }
@@ -3673,6 +3802,7 @@ function enableSwipeToDismiss(sheetEl, closeFn){
 enableSwipeToDismiss(document.getElementById("sheet"), closeSheet);
 enableSwipeToDismiss(document.getElementById("logSheet"), closeLog);
 enableSwipeToDismiss(document.getElementById("settingsSheet"), closeSettings);
+enableSwipeToDismiss(performSheet, closePerformView);
 
 // --- Auth gate ---------------------------------------------------------
 // Nothing below runs until a session exists. On first load we check for

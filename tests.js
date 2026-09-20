@@ -63,6 +63,8 @@ const setup = [
   extractLineContaining('const BEST_FIT_STALENESS_CAP_DAYS'),
   extractLineContaining('const BEST_FIT_TIEBREAK_WEIGHT'),
   extractFunction("bestFitScore"),
+  extractLineContaining('const READINESS_WINDOW_DAYS'),
+  extractFunction("computeReadinessBannerHtml"),
 ].join("\n\n");
 
 vm.runInContext(setup, sandbox);
@@ -216,6 +218,46 @@ eq(sandbox.computeAutoRange(), null, "no songs at all = no auto range");
   const known = {last_played:"2026-01-01", fit_score:3};
   const unknown = {last_played:"2026-01-01", fit_score:Infinity};
   eq(sandbox.bestFitScore(unknown, now) < sandbox.bestFitScore(known, now), true, "unknown range scores as neutral (0), not penalized like a bad fit");
+}
+
+// --- computeReadinessBannerHtml ---
+{
+  const now = new Date("2026-09-20T12:00:00Z");
+  eq(sandbox.computeReadinessBannerHtml(null, [{status:"Learning"}], now), "", "no setlist = no banner");
+  eq(sandbox.computeReadinessBannerHtml({gig_date:null}, [{status:"Learning"}], now), "", "no gig date = no banner");
+  eq(sandbox.computeReadinessBannerHtml({gig_date:"2026-09-25"}, [], now), "", "no songs = no banner");
+}
+{
+  // Gig is 30 days out — outside the 14-day window — even with unready songs.
+  const now = new Date("2026-09-20T12:00:00Z");
+  const html = sandbox.computeReadinessBannerHtml({gig_date:"2026-10-20"}, [{status:"Learning"}], now);
+  eq(html, "", "gig far in the future doesn't warn yet");
+}
+{
+  // Gig is within the window and every song is already Solid.
+  const now = new Date("2026-09-20T12:00:00Z");
+  const html = sandbox.computeReadinessBannerHtml(
+    {gig_date:"2026-09-25"}, [{status:"Solid"}, {status:"Solid"}], now
+  );
+  eq(html, "", "all-Solid setlist doesn't warn");
+}
+{
+  // Gig is within the window and some songs aren't Solid yet.
+  const now = new Date("2026-09-20T12:00:00Z");
+  const html = sandbox.computeReadinessBannerHtml(
+    {gig_date:"2026-09-25"},
+    [{status:"Solid"}, {status:"Learning"}, {status:"Maybe"}],
+    now
+  );
+  eq(html.includes("2 of 3"), true, "counts non-Solid songs correctly");
+  eq(html.includes("aren't"), true, "plural phrasing for more than one non-Solid song");
+}
+{
+  // A gig date already in the past (overdue, never actually run) still warns.
+  const now = new Date("2026-09-20T12:00:00Z");
+  const html = sandbox.computeReadinessBannerHtml({gig_date:"2026-09-10"}, [{status:"Maybe"}], now);
+  eq(html.includes("1 of 1"), true, "overdue gig date still warns");
+  eq(html.includes("isn't"), true, "singular phrasing for exactly one non-Solid song");
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

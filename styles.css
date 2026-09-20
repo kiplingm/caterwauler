@@ -644,11 +644,11 @@
   .setlist-item-actions{display:flex; flex-direction:column; gap:6px; flex:none;}
 
   /* .sl-song-row layers onto .card with no overrides at all, so it's
-     visually identical to a Songbook/Sing Now card — the reorder/remove
-     controls live outside it entirely, in .sl-song-controls, a sibling
-     column inside .sl-song-row-wrap, so they can never make the card
-     itself look or behave differently from anywhere else it appears
-     (see docs/SONG_CARD_STANDARD.md). */
+     visually identical to a Songbook card — the reorder/remove controls
+     live outside it entirely, in .sl-song-controls, a sibling column
+     inside .sl-song-row-wrap, so they can never make the card itself
+     look or behave differently from anywhere else it appears (see
+     docs/SONG_CARD_STANDARD.md). */
   .sl-song-row-wrap{display:flex; align-items:stretch; gap:8px; margin-bottom:10px;}
   .sl-song-row-wrap .sl-song-row{margin-bottom:0; flex:1; min-width:0;}
   .sl-song-num{
@@ -668,6 +668,19 @@
     max-height:220px; overflow-y:auto; margin-top:-4px; margin-bottom:12px;
   }
   .sl-add-results:empty{margin:0;}
+
+  /* --- Perform mode --- */
+  .perform-mark-btn{
+    width:100%; margin-top:10px; padding:12px 0; border-radius:10px; border:1px solid var(--teal);
+    background:transparent; color:var(--teal); font-family:'IBM Plex Mono',monospace; font-size:13px;
+    font-weight:700; letter-spacing:0.3px;
+  }
+  .readiness-banner{
+    margin:0 0 12px; padding:10px 12px; border-radius:10px;
+    background:rgba(232,97,90,0.12); border:1px solid var(--red); color:var(--red);
+    font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600;
+  }
+  .readiness-banner:empty{display:none;}
 
   /* --- Wide-viewport layout ---
      The app is built mobile-first with no width cap, so on a desktop
