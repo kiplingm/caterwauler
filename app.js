@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "70";
+const BUILD_VERSION = "71";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -104,15 +104,12 @@ let karafunOnly = false;
 let expandedCardIds = new Set();
 let searchTerm = "";
 let sortMode = "fit";
-// Sing Now is the landing view: a short, ranked stack of Solid songs meant
-// for picking your next song live at karaoke, as opposed to the full
-// Songbook view (search/filter/sort over everything). Persisted so the
-// app reopens on whichever mode was last used.
-let currentView = ["songbook","setlists"].includes(localStorage.getItem("ss_view")) ? localStorage.getItem("ss_view") : "singNow";
-// Ids excluded from the current Sing Now stack — populated by "Give me
-// different picks" so reshuffling doesn't just show the same songs again
-// until every eligible song has had a turn, then it resets.
-let singNowExcludeIds = new Set();
+// Songbook is the landing view: "Best fit" sort (see bestFitScore below)
+// folds in what a standalone "Sing Now" view used to show on its own —
+// Solid songs favoring ones you haven't sung in a while — right inside
+// the full Songbook view (search/filter/sort still available). Persisted
+// so the app reopens on whichever mode was last used.
+let currentView = ["setlists","recs"].includes(localStorage.getItem("ss_view")) ? localStorage.getItem("ss_view") : "songbook";
 // Main search bar's KaraFun-catalog fallback: when a search matches nothing
 // anywhere in the user's own songbook, we debounce a lookup against the
 // shared catalog and offer results as "not in your songbook yet" adds.
@@ -123,14 +120,31 @@ let catalogFallbackDebounce = null;
 let editingStatusId = null;
 const STATUS_OPTIONS = ["Solid","Learning","Maybe","Suggested","Retired","Test"];
 const STATUS_ICONS = {Solid:"✓", Learning:"◐", Maybe:"?", Suggested:"★", Retired:"✕", Test:"⚗"};
+// "Test" marks an unvetted Recommendation candidate (see addRecommendation's
+// "+Test" write) — it's an internal bookkeeping value, not a real choice a
+// user should be manually assigning to an already-real song, so it's left
+// out of both manual status pickers (the Add/Edit sheet's #fStatus and the
+// inline per-card status editor). The filter chips still use the full
+// STATUS_OPTIONS, since *viewing* your Test songs is still useful.
+const MANUAL_STATUS_OPTIONS = STATUS_OPTIONS.filter(opt => opt !== "Test");
 
-// The Add/Edit song form's status field is the one place STATUS_OPTIONS
-// isn't consumed generically at render time (the filter chips and the
+// Populates a status <select> for manual editing. Grandfathers "Test" back
+// in only when that's the song's *current* status — otherwise, setting
+// .value on a <select> to a value with no matching <option> leaves nothing
+// selected, which reads back as "" and would silently blank the status on
+// save for any song a user opens that happens to already be Test.
+function populateStatusSelect(selectEl, currentStatus){
+  const opts = currentStatus === "Test" ? STATUS_OPTIONS : MANUAL_STATUS_OPTIONS;
+  selectEl.innerHTML = opts.map(opt => `<option value="${opt}">${opt}</option>`).join("");
+  selectEl.value = currentStatus;
+}
+
+// The Add/Edit song form's status field is the one place status options
+// aren't consumed generically at render time (the filter chips and the
 // per-song status editor both are) — populate it here instead of hardcoding
 // the option list a second time in index.html, so a future status addition
 // can't silently miss this form the way "Test" originally did.
-document.getElementById("fStatus").innerHTML = STATUS_OPTIONS
-  .map(opt => `<option ${opt==="Maybe"?"selected":""}>${opt}</option>`).join("");
+populateStatusSelect(document.getElementById("fStatus"), "Maybe");
 
 document.getElementById("sortSelect").addEventListener("change", e=>{
   sortMode = e.target.value;
@@ -268,46 +282,38 @@ function fitLabel(lowS, highS){
   return {cls:"fit-out", text:"✕ OUT OF RANGE"};
 }
 
-// Ranks Solid-status songs for the "Sing Now" quick-pick stack: songs you
-// haven't sung in a while are favored (or have never been logged at all),
-// with a known-good range fit as a lighter-weight tiebreaker. Pure/testable
-// on purpose — takes the already-shaped `songs` array (with last_played and
-// fit_score already computed by fetchSongs) plus an `excludeIds` set for
-// reshuffling, and returns the top `count` picks, best-first.
+// Scores a song for Songbook's "Best fit" sort: songs you haven't sung in
+// a while rank first (or have never been logged at all), with a known-good
+// range fit as a lighter-weight tiebreaker. Pure/testable on purpose — takes
+// one song (with last_played and fit_score already computed by fetchSongs)
+// and returns a plain number, lower = better/sooner. This is the scoring
+// that used to live behind a standalone "Sing Now" view (Solid-only, top 5);
+// it's now folded directly into Songbook's own sort so the same pick surfaces
+// inside the full view instead of a separate screen — see renderSongbook's
+// "fit" sort branch, which still sorts unknown-range songs last on top of
+// this, exactly as it did before.
 //
-// Lower internal score = picked sooner. Staleness (days since last sung,
-// capped so "3 months ago" and "a year ago" aren't wildly different) is
-// weighted far more than fit, since every candidate is already Solid —
-// fit only breaks near-ties. Never-sung songs are treated as maximally
-// stale so they surface early rather than languishing unpicked forever.
-const SING_NOW_STALENESS_CAP_DAYS = 90;
-const SING_NOW_FIT_TIEBREAK_WEIGHT = 0.3;
+// Staleness (days since last sung, capped so "3 months ago" and "a year ago"
+// aren't wildly different) is weighted far more than fit — fit only breaks
+// near-ties. Never-sung songs are treated as maximally stale so they surface
+// early rather than languishing unpicked forever. Applying this to every
+// status (not just Solid) is intentional and low-risk: non-Solid songs
+// mostly have no performance history, so they cluster at the same max
+// staleness value and effectively fall back to a fit-score ordering close
+// to what "Best fit" already did for them.
+const BEST_FIT_STALENESS_CAP_DAYS = 90;
+const BEST_FIT_TIEBREAK_WEIGHT = 0.3;
 
-function pickSingNowSongs(allSongs, options){
-  options = options || {};
-  const count = options.count === undefined ? 5 : options.count;
-  const excludeIds = options.excludeIds || new Set();
-  const now = options.now || new Date();
-  const eligible = allSongs.filter(s => s.status === "Solid" && !excludeIds.has(s.id));
-
-  const scored = eligible.map(s => {
-    const daysSince = s.last_played
-      ? Math.floor((now - new Date(s.last_played)) / 86400000)
-      : Infinity;
-    const staleness = isFinite(daysSince)
-      ? Math.min(daysSince, SING_NOW_STALENESS_CAP_DAYS)
-      : SING_NOW_STALENESS_CAP_DAYS + 1; // never logged — nudge above the cap so it's not tied with "just old"
-    const fitPenalty = isFinite(s.fit_score) ? s.fit_score : 0; // unknown range = neutral, not penalized
-    const score = fitPenalty * SING_NOW_FIT_TIEBREAK_WEIGHT - staleness;
-    return {song: s, score};
-  });
-
-  scored.sort((a, b) => {
-    if(a.score !== b.score) return a.score - b.score;
-    return (a.song.title || "").localeCompare(b.song.title || "");
-  });
-
-  return scored.slice(0, count).map(x => x.song);
+function bestFitScore(song, now){
+  now = now || new Date();
+  const daysSince = song.last_played
+    ? Math.floor((now - new Date(song.last_played)) / 86400000)
+    : Infinity;
+  const staleness = isFinite(daysSince)
+    ? Math.min(daysSince, BEST_FIT_STALENESS_CAP_DAYS)
+    : BEST_FIT_STALENESS_CAP_DAYS + 1; // never logged — nudge above the cap so it's not tied with "just old"
+  const fitPenalty = isFinite(song.fit_score) ? song.fit_score : 0; // unknown range = neutral, not penalized
+  return fitPenalty * BEST_FIT_TIEBREAK_WEIGHT - staleness;
 }
 
 // Lower score = better fit against comfort zone. Unknown ranges (song's or
@@ -458,8 +464,8 @@ function renderRangeInfo(low, high, rangeSource, keyNotes, title, artist){
 // ============================================================
 // SONG CARD — the single canonical builder for how a saved song
 // (a row from the `songs` table) is rendered anywhere in the app.
-// Songbook, Sing Now, and Setlists all call this instead of
-// hand-writing their own <div class="card">, so the three views
+// Songbook and Setlists (both its Edit and Perform views) all call this
+// instead of hand-writing their own <div class="card">, so those views
 // can't drift out of sync with each other the way they used to.
 // See docs/SONG_CARD_STANDARD.md for the full contract, including
 // the two intentional exceptions (recommendation candidates and
@@ -476,7 +482,7 @@ function buildSongCardHtml(song, opts = {}){
                                  // wiring stay per-row. May contain
                                  // arbitrary text (e.g. "title|artist"),
                                  // so it's always HTML/CSS-escaped below.
-    extraClasses = "",          // e.g. "sing-now-card", "sl-song-row", "rec-item"
+    extraClasses = "",          // e.g. "sl-song-row", "rec-item"
     leadingHead = "",           // extra markup at the start of the head
                                  // row, e.g. a setlist position number
     headExtra = "",             // extra markup in the head's right side,
@@ -493,7 +499,7 @@ function buildSongCardHtml(song, opts = {}){
                                  // — e.g. a recommendation's Add/Dismiss.
                                  // Pass null (default) to keep the
                                  // standard actions when song.id is set.
-    keyNotes = song.key_notes,  // pass null to suppress (Sing Now hides them)
+    keyNotes = song.key_notes,  // pass null to suppress a card's key notes
     showLastPlayed = true,
     footer = "",                // always-visible content below card-body,
                                  // outside the expand gate (e.g. setlist
@@ -522,7 +528,7 @@ function buildSongCardHtml(song, opts = {}){
             <div class="card-head-right-row">
               ${editingStatusId === songId ? `
                 <select class="status-edit-select" data-id="${songId}">
-                  ${STATUS_OPTIONS.map(opt => `<option value="${opt}" ${opt===song.status?"selected":""}>${opt}</option>`).join("")}
+                  ${(song.status === "Test" ? STATUS_OPTIONS : MANUAL_STATUS_OPTIONS).map(opt => `<option value="${opt}" ${opt===song.status?"selected":""}>${opt}</option>`).join("")}
                 </select>
               ` : (song.status ? `
                 <div class="status-pill status-${song.status}" data-id="${songId}"><span class="status-icon">${STATUS_ICONS[song.status]||""}</span> ${song.status}</div>
@@ -557,9 +563,9 @@ function buildSongCardHtml(song, opts = {}){
 // container.innerHTML, in any view built from buildSongCardHtml.
 // `refresh` is called after a status edit closes (Enter, blur, or a new
 // selection) — pass the function that re-renders *this* view; Songbook
-// and Sing Now both use the top-level render() dispatcher, but a
-// setlist's song sheet needs its own re-fetch since it keeps a separate
-// local copy of song data.
+// uses the top-level render() dispatcher, but a setlist's song sheet (Edit
+// or Perform) needs its own re-fetch since it keeps a separate local copy
+// of song data.
 function wireSongCardEvents(container, refresh = render){
   container.querySelectorAll(".card-head").forEach(el=>{
     el.onclick = (e) => {
@@ -588,29 +594,29 @@ function wireSongCardEvents(container, refresh = render){
 }
 
 function render(){
-  if(currentView === "singNow"){
-    renderSingNow();
-  }else if(currentView === "setlists"){
+  if(currentView === "setlists"){
     fetchSetlists();
+  }else if(currentView === "recs"){
+    loadRecommendations();
   }else{
     renderSongbook();
   }
 }
 
 function syncViewVisibility(view){
-  document.getElementById("viewSingNowBtn").classList.toggle("active", view === "singNow");
   document.getElementById("viewSongbookBtn").classList.toggle("active", view === "songbook");
   document.getElementById("viewSetlistsBtn").classList.toggle("active", view === "setlists");
-  document.getElementById("singNowList").style.display = view === "singNow" ? "flex" : "none";
+  document.getElementById("viewRecsBtn").classList.toggle("active", view === "recs");
   document.getElementById("list").style.display = view === "songbook" ? "flex" : "none";
   document.getElementById("setlistsView").style.display = view === "setlists" ? "flex" : "none";
+  document.getElementById("recsView").style.display = view === "recs" ? "flex" : "none";
   document.getElementById("controls").style.display = view === "songbook" ? "flex" : "none";
   countRow.style.display = view === "songbook" ? "block" : "none";
   // The FAB's job changes with the view: add a song on Songbook, start a
-  // new setlist on Setlists, and it has no clear job on Sing Now (that
-  // view's own "Give me different picks" button is the primary action
-  // there), so it's hidden rather than doing something off-topic.
-  document.getElementById("fabAdd").style.display = view === "singNow" ? "none" : "flex";
+  // new setlist on Setlists. Recommendations has its own inline Add/Dismiss
+  // action per row, so the FAB has no clear job there and is hidden — the
+  // same treatment the old standalone Sing Now view got.
+  document.getElementById("fabAdd").style.display = view === "recs" ? "none" : "flex";
   document.getElementById("fabAdd").textContent = "+";
   document.getElementById("fabAdd").setAttribute("aria-label", view === "setlists" ? "New setlist" : "Add song");
 }
@@ -622,45 +628,9 @@ function setView(view){
   render();
 }
 
-document.getElementById("viewSingNowBtn").onclick = () => setView("singNow");
 document.getElementById("viewSongbookBtn").onclick = () => setView("songbook");
 document.getElementById("viewSetlistsBtn").onclick = () => setView("setlists");
-
-function renderSingNow(){
-  const listEl = document.getElementById("singNowList");
-  const solidCount = songs.filter(s => s.status === "Solid").length;
-
-  if(solidCount === 0){
-    listEl.innerHTML = `
-      <div class="empty">
-        Mark a few songs Solid to get started — Sing Now picks from those,
-        favoring ones you haven't sung in a while.
-      </div>`;
-    return;
-  }
-
-  const picks = pickSingNowSongs(songs, {excludeIds: singNowExcludeIds});
-
-  if(picks.length === 0){
-    // Every Solid song has been excluded via reshuffling — reset and
-    // start the rotation over rather than showing a dead end.
-    singNowExcludeIds = new Set();
-    renderSingNow();
-    return;
-  }
-
-  listEl.innerHTML = `
-    <div class="sing-now-intro">Your next best picks, right now:</div>
-    ${picks.map(s => buildSongCardHtml(s, {extraClasses: "sing-now-card", keyNotes: null})).join("")}
-    <button class="reshuffle-btn" id="reshuffleBtn">${SHUFFLE_ICON_SVG} Give me different picks</button>
-  `;
-
-  wireSongCardEvents(listEl);
-  document.getElementById("reshuffleBtn").onclick = () => {
-    picks.forEach(s => singNowExcludeIds.add(s.id));
-    renderSingNow();
-  };
-}
+document.getElementById("viewRecsBtn").onclick = () => setView("recs");
 
 function renderSongbook(){
   let filtered = songs.filter(s=>{
@@ -670,6 +640,7 @@ function renderSongbook(){
     return matchesFilter && matchesKarafun && matchesSearch;
   });
 
+  const bestFitNow = new Date(); // computed once, not per comparison
   filtered = filtered.slice().sort((a,b)=>{
     if(sortMode === "title"){
       return (a.title||"").localeCompare(b.title||"");
@@ -708,9 +679,17 @@ function renderSongbook(){
       if(aS !== bS) return sortMode === "highest" ? bS - aS : aS - bS;
       return (a.title||"").localeCompare(b.title||"");
     }
-    // fit: best range match first, tie-broken by title
-    if(a.fit_score !== b.fit_score) return a.fit_score - b.fit_score;
-    return (a.title||"").localeCompare(b.title||"");
+    // fit: best range match first, weighted toward songs you haven't sung
+    // in a while (see bestFitScore) — unknown-range songs still sort last,
+    // exactly as "challenging" above does, before that weighting applies.
+    {
+      const aUnknown = !isFinite(a.fit_score), bUnknown = !isFinite(b.fit_score);
+      if(aUnknown !== bUnknown) return aUnknown ? 1 : -1;
+      if(aUnknown && bUnknown) return (a.title||"").localeCompare(b.title||"");
+      const scoreDiff = bestFitScore(a, bestFitNow) - bestFitScore(b, bestFitNow);
+      if(scoreDiff !== 0) return scoreDiff;
+      return (a.title||"").localeCompare(b.title||"");
+    }
   });
 
   countRow.textContent = `${filtered.length} of ${songs.length} songs`;
@@ -776,9 +755,9 @@ async function updateStatus(id, newStatus){
     if(!res.ok) throw new Error("Status update failed");
     showToast(`Status set to ${newStatus}`);
     await fetchSongs();
-    // fetchSongs() -> render() refreshes Songbook/Sing Now/Setlists-list,
-    // but not an open setlist's song sheet — that keeps its own local
-    // copy (currentSetlistSongs), so refresh it separately if open.
+    // fetchSongs() -> render() refreshes Songbook/Setlists-list, but not
+    // an open setlist's song sheet (Edit or Perform) — that keeps its own
+    // local copy (currentSetlistSongs), so refresh it separately if open.
     if(currentSetlistId) fetchSetlistSongs(currentSetlistId);
   }catch(err){
     showToast("Error: " + err.message);
@@ -859,10 +838,6 @@ function youtubeSearchUrl(title, artist){
 
 const SPOTIFY_ICON_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.56 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>`;
 const YOUTUBE_ICON_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>`;
-// Same solid-icon style as the two above — used on the reshuffle button
-// in place of the old 🔀 emoji, which rendered differently per platform.
-const SHUFFLE_ICON_SVG = `<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>`;
-
 // Small circular icon-only Spotify/YouTube links, meant to sit inline in
 // a song card's meta row rather than as their own full-width button row.
 function externalLinksHtml(title, artist){
@@ -892,7 +867,7 @@ document.getElementById("fabAdd").onclick = ()=>{
   document.getElementById("sheetTitle").textContent = "Add song";
   document.getElementById("editId").value = "";
   ["fTitle","fArtist","fLow","fHigh","fGenre","fReleaseYear","fKeyNotes"].forEach(id=>document.getElementById(id).value="");
-  document.getElementById("fStatus").value = "Maybe";
+  populateStatusSelect(document.getElementById("fStatus"), "Maybe");
   document.getElementById("fRangeSource").value = "manual";
   document.getElementById("titleSuggestions").classList.remove("open");
   document.getElementById("artistSuggestions").classList.remove("open");
@@ -922,7 +897,7 @@ function openEdit(id){
   document.getElementById("fLow").value = s.low_note || "";
   document.getElementById("fHigh").value = s.high_note || "";
   document.getElementById("fRangeSource").value = s.range_source || "manual";
-  document.getElementById("fStatus").value = s.status || "Maybe";
+  populateStatusSelect(document.getElementById("fStatus"), s.status || "Maybe");
   document.getElementById("fGenre").value = s.genre || "";
   document.getElementById("fReleaseYear").value = s.release_year || "";
   document.getElementById("fKeyNotes").value = s.key_notes || "";
@@ -1528,17 +1503,9 @@ wireAutocomplete("fArtist", "artistSuggestions");
   });
 });
 // --- Recommendations (v1: catalog-based — matches artists you're Solid on, gated by vocal range) ---
-const recSheet = document.getElementById("recSheet");
-const recBackdrop = document.getElementById("recBackdrop");
-
-document.getElementById("recBtn").onclick = openRecommendations;
-document.getElementById("btnRecClose").onclick = closeRecommendations;
-recBackdrop.onclick = closeRecommendations;
-
-function closeRecommendations(){
-  recBackdrop.classList.remove("open");
-  recSheet.classList.remove("open");
-}
+// A view-switcher tab (see render()'s "recs" branch), not a sheet — it
+// used to be a bottom sheet reached via a header icon, but that buried a
+// core discovery feature behind the same visual weight as Settings/Help.
 
 function normalizeForMatch(str){
   return (str || "").replace(/[^a-zA-Z0-9]+/g, "").toLowerCase();
@@ -1783,9 +1750,7 @@ function interleaveTiers(tierLists){
   return merged;
 }
 
-async function openRecommendations(){
-  recBackdrop.classList.add("open");
-  recSheet.classList.add("open");
+async function loadRecommendations(){
   const listEl = document.getElementById("recList");
   listEl.innerHTML = `<div class="rec-loading">Finding matches and checking vocal range…</div>`;
 
@@ -2684,7 +2649,7 @@ function impersonatedByEmail(){
 document.getElementById("reportFab").onclick = () => {
   document.getElementById("reportMessage").value = "";
   document.getElementById("reportCategory").value = "ux";
-  const screen = currentView === "singNow" ? "Sing Now" : currentView === "setlists" ? "Setlists" : "Songbook";
+  const screen = currentView === "setlists" ? "Setlists" : currentView === "recs" ? "Recommendations" : "Songbook";
   document.getElementById("reportContext").textContent =
     `Screen: ${screen} · ${currentUserEmail || ""}` + (impersonatedByEmail() ? ` (via ${impersonatedByEmail()})` : "");
   reportBackdrop.classList.add("open");
@@ -3143,14 +3108,14 @@ const TUTORIAL_SLIDES = [
     body: "In Settings, choose Auto (calculated from your Solid songs) or Manual (type your own). Once it's set, every song shows whether it's in range — green means go, red means it's a stretch."
   },
   {
-    emoji: "✨",
-    title: "Sing Now — your next pick",
-    body: "This is the home screen: a short list of Solid songs picked for you, favoring ones you haven't sung in a while. Tap \"Sing it\" to log a performance right from there."
+    emoji: "🎯",
+    title: "Best fit — your next pick",
+    body: "In Songbook, sort by \"Best fit\" to surface Solid songs that match your range and that you haven't sung in a while — your next pick, right inside the full songbook, not a separate screen."
   },
   {
     emoji: "🔎",
     title: "Discover more",
-    body: "Recommendations suggests new songs from artists you're already solid on. Setlists let you plan ahead for a specific gig. Both are up top, next to Settings."
+    body: "Recommendations and Setlists are both tabs up top, next to Songbook. Build a setlist ahead of a gig, then tap it to mark songs sung live — or hit Edit to keep planning."
   }
 ];
 let tutorialStep = 0;
@@ -3707,7 +3672,6 @@ function enableSwipeToDismiss(sheetEl, closeFn){
 
 enableSwipeToDismiss(document.getElementById("sheet"), closeSheet);
 enableSwipeToDismiss(document.getElementById("logSheet"), closeLog);
-enableSwipeToDismiss(document.getElementById("recSheet"), closeRecommendations);
 enableSwipeToDismiss(document.getElementById("settingsSheet"), closeSettings);
 
 // --- Auth gate ---------------------------------------------------------
@@ -3944,7 +3908,7 @@ document.getElementById("authUseDifferentBtn").onclick = () => {
   if(params.get("new") === "1"){
     await authClient.auth.signOut();
     try{ localStorage.removeItem("ss_view"); }catch(e){ /* ignore */ }
-    currentView = "singNow";
+    currentView = "songbook";
     params.delete("new");
     const cleanUrl = window.location.pathname + (params.toString() ? "?" + params.toString() : "");
     window.history.replaceState({}, "", cleanUrl);
@@ -3960,7 +3924,7 @@ document.getElementById("authUseDifferentBtn").onclick = () => {
   if(uName){
     await authClient.auth.signOut();
     try{ localStorage.removeItem("ss_view"); }catch(e){ /* ignore */ }
-    currentView = "singNow";
+    currentView = "songbook";
     let base = null;
     try{ base = localStorage.getItem("ss_base_email"); }catch(e){ /* ignore */ }
     authBackdrop.classList.add("open");

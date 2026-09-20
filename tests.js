@@ -60,9 +60,9 @@ const setup = [
   extractFunction("transpositionMessage"),
   extractFunction("normalizeForMatch"),
   extractFunction("computeAutoRange"),
-  extractLineContaining('const SING_NOW_STALENESS_CAP_DAYS'),
-  extractLineContaining('const SING_NOW_FIT_TIEBREAK_WEIGHT'),
-  extractFunction("pickSingNowSongs"),
+  extractLineContaining('const BEST_FIT_STALENESS_CAP_DAYS'),
+  extractLineContaining('const BEST_FIT_TIEBREAK_WEIGHT'),
+  extractFunction("bestFitScore"),
 ].join("\n\n");
 
 vm.runInContext(setup, sandbox);
@@ -186,52 +186,36 @@ eq(sandbox.computeAutoRange(), null, "no songs at all = no auto range");
   eq(r.comfortHigh, "D4", "Learning/Maybe songs don't widen the range");
 }
 
-// --- pickSingNowSongs ---
+// --- bestFitScore (folded into Songbook's "Best fit" sort; formerly the
+// standalone "Sing Now" ranking) ---
 {
   const now = new Date("2026-08-01T12:00:00Z");
-  const songs = [
-    {id:"a", status:"Solid", last_played:"2026-07-30", fit_score:0}, // sung 2 days ago
-    {id:"b", status:"Solid", last_played:"2026-01-01", fit_score:0}, // sung ~7mo ago, capped
-    {id:"c", status:"Solid", last_played:null, fit_score:0},          // never sung
-    {id:"d", status:"Learning", last_played:null, fit_score:0},       // wrong status, excluded
-    {id:"e", status:"Retired", last_played:null, fit_score:0},        // wrong status, excluded
-  ];
-  const picks = sandbox.pickSingNowSongs(songs, {now});
-  eq(picks.length, 3, "only Solid songs are eligible");
-  eq(picks.map(p=>p.id), ["c","b","a"], "never-played and long-stale songs rank ahead of recently-sung ones");
+  const recentlySung = {last_played:"2026-07-30", fit_score:0}; // sung 2 days ago
+  const staleLong = {last_played:"2026-01-01", fit_score:0};    // sung ~7mo ago, capped
+  const neverSung = {last_played:null, fit_score:0};
+  const scores = [recentlySung, staleLong, neverSung].map(s => sandbox.bestFitScore(s, now));
+  eq(scores[2] < scores[1], true, "never-played ranks ahead of long-stale (lower score = sooner)");
+  eq(scores[1] < scores[0], true, "long-stale ranks ahead of recently-sung");
 }
 {
   // Staleness is capped, so two songs both well past the cap tie on
   // recency and fall back to fit_score as the tiebreaker.
   const now = new Date("2026-08-01T12:00:00Z");
-  const songs = [
-    {id:"good-fit", status:"Solid", last_played:"2024-01-01", fit_score:0},
-    {id:"bad-fit", status:"Solid", last_played:"2023-01-01", fit_score:5},
-  ];
-  const picks = sandbox.pickSingNowSongs(songs, {now});
-  eq(picks.map(p=>p.id), ["good-fit","bad-fit"], "past the staleness cap, better range fit breaks the tie");
+  const goodFit = {last_played:"2024-01-01", fit_score:0};
+  const badFit = {last_played:"2023-01-01", fit_score:5};
+  eq(
+    sandbox.bestFitScore(goodFit, now) < sandbox.bestFitScore(badFit, now), true,
+    "past the staleness cap, better range fit breaks the tie"
+  );
 }
 {
-  // excludeIds supports the "give me different picks" reshuffle.
+  // Unknown range (fit_score not finite) is treated as neutral (0), not
+  // penalized — renderSongbook's sort separately keeps unknown-range songs
+  // sorting last regardless of this score, same as "challenging" does.
   const now = new Date("2026-08-01T12:00:00Z");
-  const songs = [
-    {id:"a", status:"Solid", last_played:null, fit_score:0},
-    {id:"b", status:"Solid", last_played:null, fit_score:0},
-  ];
-  const picks = sandbox.pickSingNowSongs(songs, {now, excludeIds: new Set(["a"])});
-  eq(picks.map(p=>p.id), ["b"], "excludeIds removes songs from consideration");
-}
-{
-  // count limits the stack size (default is 5, used by the app; here we
-  // check an explicit smaller count is honored).
-  const now = new Date("2026-08-01T12:00:00Z");
-  const songs = [
-    {id:"a", status:"Solid", last_played:null, fit_score:0},
-    {id:"b", status:"Solid", last_played:null, fit_score:0},
-    {id:"c", status:"Solid", last_played:null, fit_score:0},
-  ];
-  const picks = sandbox.pickSingNowSongs(songs, {now, count: 2});
-  eq(picks.length, 2, "count caps the number of picks returned");
+  const known = {last_played:"2026-01-01", fit_score:3};
+  const unknown = {last_played:"2026-01-01", fit_score:Infinity};
+  eq(sandbox.bestFitScore(unknown, now) < sandbox.bestFitScore(known, now), true, "unknown range scores as neutral (0), not penalized like a bad fit");
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

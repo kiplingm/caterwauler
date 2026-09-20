@@ -141,18 +141,10 @@
   .view-tab.active{border-color:var(--gold); color:var(--gold); background:rgba(232,183,78,0.1);}
   .view-tab svg{vertical-align:-3px; margin-right:5px;}
 
-  .sing-now-intro{
+  .view-intro{
     font-family:'IBM Plex Mono',monospace; font-size:11.5px; letter-spacing:0.3px; color:var(--cream-dim);
     padding:2px 4px 2px;
   }
-  .sing-now-card .card-actions{margin-top:10px;}
-  .reshuffle-btn{
-    margin-top:4px; align-self:center; background:transparent; border:1px solid var(--line);
-    color:var(--cream-dim); font-family:'IBM Plex Mono',monospace; font-size:12px;
-    padding:9px 16px; border-radius:999px;
-  }
-  .reshuffle-btn:active{border-color:var(--teal); color:var(--teal);}
-  .reshuffle-btn svg{vertical-align:-2px; margin-right:5px;}
 
   .controls{padding:14px 18px 4px; display:flex; flex-direction:column; gap:10px;}
   .search-row{display:flex; gap:8px;}
