@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "75";
+const BUILD_VERSION = "76";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -160,7 +160,11 @@ const FILTERS = ["Solid","Learning","Maybe","Suggested","Retired","Test"];
 
 FILTERS.forEach(f=>{
   const c = document.createElement("button");
-  c.className = "chip";
+  // Reuses the same green/teal/gold/cream-dim/red/purple mapping the
+  // .status-X pill classes use on song cards, so a chip's active color
+  // matches the status pill it filters for instead of every chip going
+  // uniformly gold regardless of which status it represents.
+  c.className = `chip chip-${f.toLowerCase()}`;
   c.textContent = f;
   c.onclick = () => {
     if(activeFilters.has(f)){ activeFilters.delete(f); c.classList.remove("active"); }
@@ -176,7 +180,7 @@ FILTERS.forEach(f=>{
 // them instead: one interaction pattern for "narrow the list" rather than
 // two, and it reclaims the row a standalone toggle used to take.
 const karafunChip = document.createElement("button");
-karafunChip.className = "chip";
+karafunChip.className = "chip chip-karafun";
 karafunChip.textContent = "KaraFun";
 karafunChip.onclick = () => {
   karafunOnly = !karafunOnly;
@@ -1834,7 +1838,10 @@ function renderRecommendations(results, outOfRangeResults, unconfirmedSongs){
   // and bodyActions swaps in Add/Dismiss in place of the standard
   // Performances/+Setlist/Edit buttons.
   const renderItem = (r, i, group) => buildSongCardHtml(
-    {title: r.title, artist: r.artist, low_note: r.low_note, high_note: r.high_note},
+    // Every candidate is sourced directly from karafun_catalog itself (see
+    // fetchTierCandidates), so in_karafun is always true here — not something
+    // that needs checking per-row, unlike a saved song's own column.
+    {title: r.title, artist: r.artist, low_note: r.low_note, high_note: r.high_note, in_karafun: true},
     {
       cardKey: `${r.title}|${r.artist}`.toLowerCase(),
       extraClasses: "rec-item",
