@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "74";
+const BUILD_VERSION = "75";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -170,12 +170,20 @@ FILTERS.forEach(f=>{
   chipsEl.appendChild(c);
 });
 
-const karafunSwitch = document.getElementById("karafunSwitch");
-karafunSwitch.onclick = () => {
+// KaraFun-only used to be a separate toggle switch below the chip row —
+// it's functionally just another boolean filter (ANDed with status, not
+// part of the activeFilters Set), so it's rendered as a chip alongside
+// them instead: one interaction pattern for "narrow the list" rather than
+// two, and it reclaims the row a standalone toggle used to take.
+const karafunChip = document.createElement("button");
+karafunChip.className = "chip";
+karafunChip.textContent = "KaraFun";
+karafunChip.onclick = () => {
   karafunOnly = !karafunOnly;
-  karafunSwitch.classList.toggle("on", karafunOnly);
+  karafunChip.classList.toggle("active", karafunOnly);
   render();
 };
+chipsEl.appendChild(karafunChip);
 
 document.getElementById("search").addEventListener("input", e=>{
   searchTerm = e.target.value.toLowerCase();

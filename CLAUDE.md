@@ -19,7 +19,7 @@ for the data model and `docs/SONG_CARD_STANDARD.md` before touching any song car
 1. `node --check app.js`
 2. `node tests.js` — all tests must pass (currently 47; tests extract pure functions from
    `app.js` source, so they exercise what actually ships)
-3. Bump `BUILD_VERSION` in `app.js` (currently "74")
+3. Bump `BUILD_VERSION` in `app.js` (currently "75")
 4. Bump the cache-bust params in `index.html`: `app.js?v=N` and `styles.css?v=N`
    (bump the CSS one whenever `styles.css` changed; they are independent numbers)
 Commit messages follow "Build N: what changed and why". Git identity for commits:
