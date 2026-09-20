@@ -65,6 +65,7 @@ const setup = [
   extractFunction("bestFitScore"),
   extractLineContaining('const READINESS_WINDOW_DAYS'),
   extractFunction("computeReadinessBannerHtml"),
+  extractFunction("splitSetlistsByGigDate"),
 ].join("\n\n");
 
 vm.runInContext(setup, sandbox);
@@ -258,6 +259,28 @@ eq(sandbox.computeAutoRange(), null, "no songs at all = no auto range");
   const html = sandbox.computeReadinessBannerHtml({gig_date:"2026-09-10"}, [{status:"Maybe"}], now);
   eq(html.includes("1 of 1"), true, "overdue gig date still warns");
   eq(html.includes("isn't"), true, "singular phrasing for exactly one non-Solid song");
+}
+
+// --- splitSetlistsByGigDate ---
+{
+  const today = "2026-09-20";
+  const rows = [
+    {gig_date:"2026-09-10"}, // 0: past
+    {gig_date:"2026-09-25"}, // 1: upcoming
+    {gig_date:null},          // 2: undated -> upcoming, sorts last within it
+    {gig_date:"2026-09-20"}, // 3: today itself -> upcoming
+    {gig_date:"2026-09-22"}, // 4: upcoming, soonest
+  ];
+  const {upcoming, past} = sandbox.splitSetlistsByGigDate(rows, today);
+  eq(past, [0], "gig dates before today are Past");
+  eq(upcoming, [3, 4, 1, 2], "gig dates today-or-later sort ascending (soonest first), undated last");
+}
+{
+  // No dated setlists at all — everything undated lands in Upcoming.
+  const rows = [{gig_date:null}, {gig_date:null}];
+  const {upcoming, past} = sandbox.splitSetlistsByGigDate(rows, "2026-09-20");
+  eq(upcoming, [0, 1], "undated setlists all land in Upcoming");
+  eq(past, [], "no Past group when nothing has a past date");
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

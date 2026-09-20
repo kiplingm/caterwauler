@@ -642,6 +642,7 @@
     font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--cream-dim); margin-top:3px;
   }
   .setlist-item-actions{display:flex; flex-direction:column; gap:6px; flex:none;}
+  .setlist-past-group{opacity:0.6;}
 
   /* .sl-song-row layers onto .card with no overrides at all, so it's
      visually identical to a Songbook card — the reorder/remove controls

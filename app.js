@@ -2,7 +2,7 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "72";
+const BUILD_VERSION = "73";
 const BUILD_DATE = "2026-08-08T12:25:26-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
@@ -1951,13 +1951,37 @@ async function fetchSetlists(){
   }
 }
 
+// Splits setlists into Upcoming (gig date today-or-later, ascending —
+// soonest first — with undated/reusable lists pushed to the end of this
+// group since there's no date to sort them by) and Past (gig date before
+// today, kept in the fetch's own gig_date-descending order). Pure/testable
+// on purpose. `setlists` itself isn't a fixed shape easy to sandbox-extract
+// (it's raw Supabase rows plus a nested count), so this takes plain
+// {gig_date} objects and returns index groupings instead of re-sorting —
+// see the test file for how it's exercised in isolation.
+function splitSetlistsByGigDate(setlistRows, todayStr){
+  const upcoming = [];
+  const past = [];
+  setlistRows.forEach((sl, i) => {
+    if(!sl.gig_date || sl.gig_date >= todayStr) upcoming.push(i);
+    else past.push(i);
+  });
+  upcoming.sort((a, b) => {
+    const da = setlistRows[a].gig_date || "9999-99-99";
+    const db = setlistRows[b].gig_date || "9999-99-99";
+    return da.localeCompare(db);
+  });
+  return {upcoming, past};
+}
+
 function renderSetlistsList(){
   const listEl = document.getElementById("setlistsList");
   if(setlists.length === 0){
     listEl.innerHTML = `<div class="empty">No setlists yet. Build one with the button below.</div>`;
     return;
   }
-  listEl.innerHTML = setlists.map(sl => {
+
+  const renderItem = sl => {
     const count = (sl.setlist_songs && sl.setlist_songs[0] && sl.setlist_songs[0].count) || 0;
     const metaParts = [];
     if(sl.gig_date) metaParts.push(formatDate(sl.gig_date));
@@ -1976,7 +2000,20 @@ function renderSetlistsList(){
         </div>
       </div>
     `;
-  }).join("");
+  };
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const {upcoming, past} = splitSetlistsByGigDate(setlists, todayStr);
+
+  let html = `<div class="settings-section-label">Upcoming</div>`;
+  html += upcoming.length
+    ? upcoming.map(i => renderItem(setlists[i])).join("")
+    : `<div class="empty" style="padding:16px 4px;">Nothing scheduled — build one with the button below.</div>`;
+  if(past.length > 0){
+    html += `<div class="settings-section-label">Past</div>`;
+    html += `<div class="setlist-past-group">${past.map(i => renderItem(setlists[i])).join("")}</div>`;
+  }
+  listEl.innerHTML = html;
 
   // Tapping a setlist opens Perform mode (read-mostly, mark-as-sung) as the
   // primary action — planning/reordering lives behind the explicit Edit
