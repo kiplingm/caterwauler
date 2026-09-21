@@ -2,8 +2,8 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "77";
-const BUILD_DATE = "2026-09-20T10:41:23-07:00";
+const BUILD_VERSION = "78";
+const BUILD_DATE = "2026-09-20T19:48:47-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
 if(buildInfoEl){
@@ -94,7 +94,12 @@ let songs = [];
 // Status filter is multi-select: an empty Set means "no filter applied"
 // (equivalent to the old "All" chip), rather than requiring an explicit
 // All state to be tracked and kept in sync with the individual chips.
-let activeFilters = new Set();
+// Defaults to Solid on every load (not persisted, same as the rest of this
+// filter/search/sort state) — landing on your full unfiltered songbook
+// isn't as useful as landing on "what's actually ready to sing," which is
+// what a standalone Sing Now view used to default to before it was folded
+// into Songbook (see bestFitScore/FILTERS below).
+let activeFilters = new Set(["Solid"]);
 // KaraFun-only toggle, independent of status filters — ANDed together.
 let karafunOnly = false;
 // Songbook cards are collapsed (title/artist/status only) by default and
@@ -118,24 +123,17 @@ let currentView = ["setlists","recs"].includes(localStorage.getItem("ss_view")) 
 let catalogFallbackToken = 0;
 let catalogFallbackDebounce = null;
 let editingStatusId = null;
-const STATUS_OPTIONS = ["Solid","Learning","Maybe","Suggested","Retired","Test"];
-const STATUS_ICONS = {Solid:"✓", Learning:"◐", Maybe:"?", Suggested:"★", Retired:"✕", Test:"⚗"};
-// "Test" marks an unvetted Recommendation candidate (see addRecommendation's
-// "+Test" write) — it's an internal bookkeeping value, not a real choice a
-// user should be manually assigning to an already-real song, so it's left
-// out of both manual status pickers (the Add/Edit sheet's #fStatus and the
-// inline per-card status editor). The filter chips still use the full
-// STATUS_OPTIONS, since *viewing* your Test songs is still useful.
-const MANUAL_STATUS_OPTIONS = STATUS_OPTIONS.filter(opt => opt !== "Test");
+// "Test" (an internal marker for unvetted Recommendation candidates) used to
+// be a seventh option here, manually excluded from both status pickers via a
+// separate MANUAL_STATUS_OPTIONS list and a grandfather branch in
+// populateStatusSelect. Recommendations now write "Maybe" instead (see
+// addRecommendation) and every existing Test row was migrated to Maybe, so
+// the whole distinction is gone rather than left as unreachable dead code.
+const STATUS_OPTIONS = ["Solid","Learning","Maybe","Suggested","Retired"];
+const STATUS_ICONS = {Solid:"✓", Learning:"◐", Maybe:"?", Suggested:"★", Retired:"✕"};
 
-// Populates a status <select> for manual editing. Grandfathers "Test" back
-// in only when that's the song's *current* status — otherwise, setting
-// .value on a <select> to a value with no matching <option> leaves nothing
-// selected, which reads back as "" and would silently blank the status on
-// save for any song a user opens that happens to already be Test.
 function populateStatusSelect(selectEl, currentStatus){
-  const opts = currentStatus === "Test" ? STATUS_OPTIONS : MANUAL_STATUS_OPTIONS;
-  selectEl.innerHTML = opts.map(opt => `<option value="${opt}">${opt}</option>`).join("");
+  selectEl.innerHTML = STATUS_OPTIONS.map(opt => `<option value="${opt}">${opt}</option>`).join("");
   selectEl.value = currentStatus;
 }
 
@@ -153,32 +151,19 @@ document.getElementById("sortSelect").addEventListener("change", e=>{
 
 const listEl = document.getElementById("list");
 const countRow = document.getElementById("countRow");
+const countText = document.getElementById("countText");
 const chipsEl = document.getElementById("chips");
 // No "All" entry — an empty activeFilters Set already means unfiltered,
-// so every chip here toggles independently.
-const FILTERS = ["Solid","Learning","Maybe","Suggested","Retired","Test"];
-
-FILTERS.forEach(f=>{
-  const c = document.createElement("button");
-  // Reuses the same green/teal/gold/cream-dim/red/purple mapping the
-  // .status-X pill classes use on song cards, so a chip's active color
-  // matches the status pill it filters for instead of every chip going
-  // uniformly gold regardless of which status it represents.
-  c.className = `chip chip-${f.toLowerCase()}`;
-  c.textContent = f;
-  c.onclick = () => {
-    if(activeFilters.has(f)){ activeFilters.delete(f); c.classList.remove("active"); }
-    else{ activeFilters.add(f); c.classList.add("active"); }
-    render();
-  };
-  chipsEl.appendChild(c);
-});
+// so every chip here toggles independently. Reuses STATUS_OPTIONS rather
+// than duplicating the same list a second time.
+const FILTERS = STATUS_OPTIONS;
 
 // KaraFun-only used to be a separate toggle switch below the chip row —
 // it's functionally just another boolean filter (ANDed with status, not
 // part of the activeFilters Set), so it's rendered as a chip alongside
 // them instead: one interaction pattern for "narrow the list" rather than
-// two, and it reclaims the row a standalone toggle used to take.
+// two, and it reclaims the row a standalone toggle used to take. Created
+// first so it lands in the first chip position, ahead of the status chips.
 const karafunChip = document.createElement("button");
 karafunChip.className = "chip chip-karafun";
 karafunChip.textContent = "KaraFun";
@@ -188,6 +173,23 @@ karafunChip.onclick = () => {
   render();
 };
 chipsEl.appendChild(karafunChip);
+
+FILTERS.forEach(f=>{
+  const c = document.createElement("button");
+  // Reuses the same green/teal/gold/cream-dim/red/purple mapping the
+  // .status-X pill classes use on song cards, so a chip's active color
+  // matches the status pill it filters for instead of every chip going
+  // uniformly gold regardless of which status it represents.
+  c.className = `chip chip-${f.toLowerCase()}`;
+  c.textContent = f;
+  if(activeFilters.has(f)) c.classList.add("active");
+  c.onclick = () => {
+    if(activeFilters.has(f)){ activeFilters.delete(f); c.classList.remove("active"); }
+    else{ activeFilters.add(f); c.classList.add("active"); }
+    render();
+  };
+  chipsEl.appendChild(c);
+});
 
 document.getElementById("search").addEventListener("input", e=>{
   searchTerm = e.target.value.toLowerCase();
@@ -540,7 +542,7 @@ function buildSongCardHtml(song, opts = {}){
             <div class="card-head-right-row">
               ${editingStatusId === songId ? `
                 <select class="status-edit-select" data-id="${songId}">
-                  ${(song.status === "Test" ? STATUS_OPTIONS : MANUAL_STATUS_OPTIONS).map(opt => `<option value="${opt}" ${opt===song.status?"selected":""}>${opt}</option>`).join("")}
+                  ${STATUS_OPTIONS.map(opt => `<option value="${opt}" ${opt===song.status?"selected":""}>${opt}</option>`).join("")}
                 </select>
               ` : (song.status ? `
                 <div class="status-pill status-${song.status}" data-id="${songId}"><span class="status-icon">${STATUS_ICONS[song.status]||""}</span> ${song.status}</div>
@@ -623,7 +625,7 @@ function syncViewVisibility(view){
   document.getElementById("setlistsView").style.display = view === "setlists" ? "flex" : "none";
   document.getElementById("recsView").style.display = view === "recs" ? "flex" : "none";
   document.getElementById("controls").style.display = view === "songbook" ? "flex" : "none";
-  countRow.style.display = view === "songbook" ? "block" : "none";
+  countRow.style.display = view === "songbook" ? "flex" : "none";
   // The FAB's job changes with the view: add a song on Songbook, start a
   // new setlist on Setlists. Recommendations has its own inline Add/Dismiss
   // action per row, so the FAB has no clear job there and is hidden — the
@@ -704,7 +706,7 @@ function renderSongbook(){
     }
   });
 
-  countRow.textContent = `${filtered.length} of ${songs.length} songs`;
+  countText.textContent = `${filtered.length} of ${songs.length} songs`;
 
   if(filtered.length===0){
     const term = searchTerm.trim();
@@ -1849,7 +1851,7 @@ function renderRecommendations(results, outOfRangeResults, unconfirmedSongs){
       bodyPrefix: `<div class="rec-item-source">${escapeHtml(r.sourceLabel)}</div>`,
       bodyActions: `
         <div class="card-actions">
-          <button class="rec-add-action primary" data-group="${group}" data-idx="${i}">+ Test</button>
+          <button class="rec-add-action primary" data-group="${group}" data-idx="${i}">+ Maybe</button>
           <button class="rec-dismiss-action danger" data-group="${group}" data-idx="${i}">Dismiss</button>
         </div>
       `
@@ -1903,7 +1905,7 @@ async function addRecommendation(rec, itemEl){
   try{
     const res = await fetch(`${SUPABASE_URL}/rest/v1/songs`, {
       method:"POST", headers:{...HEADERS, "Prefer":"return=representation"},
-      body: JSON.stringify({title: rec.title, artist: rec.artist, status: "Test", low_note: rec.low_note || null, high_note: rec.high_note || null, range_source: rec.low_note ? "estimated" : "manual"})
+      body: JSON.stringify({title: rec.title, artist: rec.artist, status: "Maybe", low_note: rec.low_note || null, high_note: rec.high_note || null, range_source: rec.low_note ? "estimated" : "manual"})
     });
     if(!res.ok) throw new Error("Add failed");
     showToast(`Added "${rec.title}" to Test`);
@@ -2842,8 +2844,13 @@ enableSwipeToDismiss(reportSheet, closeReport);
 document.getElementById("btnReportSend").onclick = async () => {
   const message = document.getElementById("reportMessage").value.trim();
   if(!message){ showToast("Describe the issue first"); return; }
-  const btn = document.getElementById("btnReportSend");
-  btn.disabled = true;
+  const category = document.getElementById("reportCategory").value;
+  const screenAtSend = currentView;
+  // Closes immediately on tap rather than waiting for the network round trip
+  // — leaving the sheet open (even briefly, with just a disabled button) read
+  // as unresponsive and led to real double-submits (two identical reports a
+  // few seconds apart). The toast below still confirms success/failure.
+  closeReport();
   try{
     const res = await fetch(`${SUPABASE_URL}/rest/v1/feedback_reports`, {
       method: "POST",
@@ -2852,20 +2859,17 @@ document.getElementById("btnReportSend").onclick = async () => {
         user_id: currentUserId,
         reporter_email: currentUserEmail,
         impersonated_by: impersonatedByEmail(),
-        path: currentView,
+        path: screenAtSend,
         message,
-        category: document.getElementById("reportCategory").value,
+        category,
         user_agent: navigator.userAgent,
         viewport: `${window.innerWidth}x${window.innerHeight}`
       })
     });
     if(!res.ok) throw new Error("insert failed");
-    closeReport();
     showToast("Thanks — report sent");
   }catch(e){
     showToast("Couldn't send — try again");
-  }finally{
-    btn.disabled = false;
   }
 };
 

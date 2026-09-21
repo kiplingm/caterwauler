@@ -19,7 +19,7 @@ for the data model and `docs/SONG_CARD_STANDARD.md` before touching any song car
 1. `node --check app.js`
 2. `node tests.js` — all tests must pass (currently 59; tests extract pure functions from
    `app.js` source, so they exercise what actually ships)
-3. Bump `BUILD_VERSION` **and** `BUILD_DATE` in `app.js` (currently "77" / 2026-09-20 —
+3. Bump `BUILD_VERSION` **and** `BUILD_DATE` in `app.js` (currently "78" / 2026-09-20 —
    `BUILD_DATE` sat wrong/stale at 2026-08-08 through builds 69-75 because nothing forced
    updating it; it's cosmetic, not consumed anywhere except the Settings screen's build-info
    line, but a wrong date there is exactly the kind of thing a tester notices and flags)
@@ -64,6 +64,20 @@ Never put tokens, keys, or PATs in the repo, in commit messages, or in this file
 - Lead with your recommendation. He's often on a phone, so keep summaries short and concrete.
 
 ## Where things stand (re-verify against git log)
+- **Build 78**, from live feedback after Build 77 shipped: removed "Test" as a status entirely
+  (it's now just "Maybe" everywhere — Recommendations' add action, `STATUS_OPTIONS`, the filter
+  chips, `.status-Test`/`.chip-test` CSS, the `--purple` variable that only they used; the 3
+  existing Test-status rows were migrated to Maybe in Supabase); moved the KaraFun chip to the
+  first position; Songbook now defaults to the Solid filter active on every load (`activeFilters`
+  starts as `new Set(["Solid"])`, not empty); the "YOUR RANGE" line moved out of the marquee (where
+  it showed on every view) into the Songbook-only count row, right-aligned next to the song count
+  (`#countText`/`#rangeLine` are now siblings inside `#countRow`, which is `display:flex` — don't
+  reintroduce `countRow.textContent = ...`, it would wipe out the `#rangeLine` child); the Report-
+  an-issue sheet now closes immediately on Send instead of after the network round trip (the old
+  behavior read as unresponsive and caused real duplicate submissions); `.sheet`/`.sheet-large`
+  max-height now also has a `dvh` declaration after the `vh` one, since plain `vh` doesn't shrink
+  for an on-screen keyboard on many mobile browsers and a sheet's own Send button could end up
+  rendered behind the keyboard.
 - Builds 71-73 restructured the app's IA after a strategic (not just heuristic) UX review found
   the nav's visual hierarchy didn't match the product's actual feature hierarchy:
   - **Build 71**: merged the standalone "Sing Now" view into Songbook's own "Best fit" sort

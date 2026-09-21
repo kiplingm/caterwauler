@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0d0d0d">
-<link rel="stylesheet" href="styles.css?v=58">
+<link rel="stylesheet" href="styles.css?v=59">
 </head>
 <body>
 
@@ -89,7 +89,6 @@
         </div>
       </div>
     </div>
-    <div class="sub" id="rangeLine">YOUR RANGE — LOADING…</div>
   </div>
 
   <div class="view-switcher" id="viewSwitcher">
@@ -114,7 +113,10 @@
     <div class="filter-chips" id="chips"></div>
   </div>
 
-  <div class="count-row" id="countRow"></div>
+  <div class="count-row" id="countRow">
+    <span id="countText"></span>
+    <span id="rangeLine">YOUR RANGE — LOADING…</span>
+  </div>
 </div>
 <div class="list" id="list">
   <div class="skeleton-card"></div>
@@ -575,10 +577,10 @@
       <strong>Solid</strong> — ready to sing tonight. Feeds Best fit
       sorting, your auto vocal range, and Recommendations.<br>
       <strong>Learning</strong> — actively working on it.<br>
-      <strong>Maybe</strong> — an uncertain candidate, not committed yet.<br>
-      <strong>Suggested</strong> — came from Recommendations, not yet reviewed.<br>
-      <strong>Retired</strong> — used to sing it, not anymore. Kept for history.<br>
-      <strong>Test</strong> — want to try it live before committing to Solid or Learning.
+      <strong>Maybe</strong> — an uncertain candidate, not committed yet. Also
+      what a Recommendations "+ Maybe" adds land as.<br>
+      <strong>Suggested</strong> — someone else suggested it; not reviewed yet.<br>
+      <strong>Retired</strong> — used to sing it, not anymore. Kept for history.
     </div>
   </div>
 
@@ -658,6 +660,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=77"></script>
+<script src="app.js?v=78"></script>
 </body>
 </html>
