@@ -2,8 +2,8 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "79";
-const BUILD_DATE = "2026-10-10T06:42:51-07:00";
+const BUILD_VERSION = "80";
+const BUILD_DATE = "2026-10-10T06:44:10-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
 if(buildInfoEl){
@@ -3279,6 +3279,7 @@ const TUTORIAL_SEEN_KEY = "ss-tutorial-seen";
 const TUTORIAL_SLIDES = [
   {
     emoji: "🎤",
+    hero: true,
     title: "Welcome to Caterwauler",
     body: "Track your karaoke songbook, know what's actually in your vocal range, and always have a great pick ready — no more guessing and hoping for the best. This takes about a minute."
   },
@@ -3310,7 +3311,9 @@ const tutorialSheet = document.getElementById("tutorialSheet");
 function renderTutorialSlide(){
   const slide = TUTORIAL_SLIDES[tutorialStep];
   document.getElementById("tutorialSlideBody").innerHTML = `
-    <div class="tutorial-slide-emoji">${slide.emoji}</div>
+    ${slide.hero
+      ? `<img class="hero-banner" src="icons/caterwauler-hero-web.jpg" alt="Caterwauler robot cat singing" width="900" height="382">`
+      : `<div class="tutorial-slide-emoji">${slide.emoji}</div>`}
     <h3>${slide.title}</h3>
     <p>${slide.body}</p>
   `;

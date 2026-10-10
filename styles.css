@@ -533,6 +533,7 @@
     color:var(--cream-dim); font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:0.3px;
   }
   .tutorial-slide{min-height:220px; display:flex; flex-direction:column; justify-content:center; text-align:center; padding:10px 4px;}
+  .hero-banner{display:block; width:100%; height:auto; border-radius:12px; margin:0 0 14px;}
   .tutorial-slide-emoji{font-size:40px; margin-bottom:14px;}
   .tutorial-slide h3{font-family:'Bebas Neue',sans-serif; font-size:24px; color:var(--gold); letter-spacing:0.5px; margin:0 0 12px;}
   .tutorial-slide p{font-family:'IBM Plex Mono',monospace; font-size:13px; line-height:1.6; color:var(--cream-dim); margin:0;}
