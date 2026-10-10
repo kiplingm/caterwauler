@@ -2,8 +2,8 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "80";
-const BUILD_DATE = "2026-10-10T06:44:10-07:00";
+const BUILD_VERSION = "81";
+const BUILD_DATE = "2026-10-10T06:47:48-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
 if(buildInfoEl){
@@ -158,38 +158,40 @@ const chipsEl = document.getElementById("chips");
 // than duplicating the same list a second time.
 const FILTERS = STATUS_OPTIONS;
 
-// KaraFun-only used to be a separate toggle switch below the chip row —
-// it's functionally just another boolean filter (ANDed with status, not
-// part of the activeFilters Set), so it's rendered as a chip alongside
-// them instead: one interaction pattern for "narrow the list" rather than
-// two, and it reclaims the row a standalone toggle used to take. Created
-// first so it lands in the first chip position, ahead of the status chips.
-const karafunChip = document.createElement("button");
-karafunChip.className = "chip chip-karafun";
-karafunChip.textContent = "KaraFun";
-karafunChip.onclick = () => {
-  karafunOnly = !karafunOnly;
-  karafunChip.classList.toggle("active", karafunOnly);
-  render();
-};
-chipsEl.appendChild(karafunChip);
-
-FILTERS.forEach(f=>{
+// Status chips are single-select: exactly one is active at a time, and
+// "All" (empty activeFilters Set) means unfiltered. KaraFun-only is a small
+// sliding switch at the end of the row, ANDed with the status filter.
+const chipEls = [];
+function syncChips(){
+  chipEls.forEach(({f,c})=>{
+    c.classList.toggle("active", f===null ? activeFilters.size===0 : activeFilters.has(f));
+  });
+}
+[null, ...FILTERS].forEach(f=>{
   const c = document.createElement("button");
   // Reuses the same green/teal/gold/cream-dim/red/purple mapping the
   // .status-X pill classes use on song cards, so a chip's active color
-  // matches the status pill it filters for instead of every chip going
-  // uniformly gold regardless of which status it represents.
-  c.className = `chip chip-${f.toLowerCase()}`;
-  c.textContent = f;
-  if(activeFilters.has(f)) c.classList.add("active");
+  // matches the status pill it filters for.
+  c.className = f===null ? "chip chip-all" : `chip chip-${f.toLowerCase()}`;
+  c.textContent = f===null ? "All" : f;
   c.onclick = () => {
-    if(activeFilters.has(f)){ activeFilters.delete(f); c.classList.remove("active"); }
-    else{ activeFilters.add(f); c.classList.add("active"); }
+    activeFilters = f===null ? new Set() : new Set([f]);
+    syncChips();
     render();
   };
+  chipEls.push({f,c});
   chipsEl.appendChild(c);
 });
+syncChips();
+
+const karafunSwitch = document.createElement("label");
+karafunSwitch.className = "kf-switch";
+karafunSwitch.innerHTML = '<input type="checkbox" id="karafunSwitch"><span class="kf-track"><span class="kf-thumb"></span></span><span class="kf-label">KaraFun</span>';
+karafunSwitch.querySelector("input").onchange = e => {
+  karafunOnly = e.target.checked;
+  render();
+};
+chipsEl.appendChild(karafunSwitch);
 
 document.getElementById("search").addEventListener("input", e=>{
   searchTerm = e.target.value.toLowerCase();
@@ -966,6 +968,7 @@ document.getElementById("btnSave").onclick = async ()=>{
     updated_at: new Date().toISOString()
   };
 
+  let createdId = null;
   try{
     if(id){
       const res = await fetch(`${SUPABASE_URL}/rest/v1/songs?id=eq.${id}`, {
@@ -978,10 +981,22 @@ document.getElementById("btnSave").onclick = async ()=>{
         method:"POST", headers:{...HEADERS, "Prefer":"return=representation"}, body: JSON.stringify(payload)
       });
       if(!res.ok) throw new Error("Insert failed");
+      try{ createdId = (await res.json())[0].id; }catch(e){}
       showToast("Song added");
     }
     syncSongRangeToSharedTable(payload.title, payload.artist, payload.low_note, payload.high_note, payload.range_source);
     closeSheet();
+    if(createdId){
+      // Land back on the songbook with the new title found: search set to
+      // it, the status chip matching its status, KaraFun switch off, card expanded.
+      activeFilters = new Set([payload.status]);
+      syncChips();
+      karafunOnly = false;
+      document.getElementById("karafunSwitch").checked = false;
+      searchTerm = title.toLowerCase();
+      document.getElementById("search").value = title;
+      expandedCardIds.add(createdId);
+    }
     fetchSongs();
   }catch(err){
     showToast("Error: " + err.message);
@@ -2241,7 +2256,9 @@ async function openSetlistDetail(id){
 
   const sl = id ? setlists.find(s => s.id === id) : null;
   document.getElementById("slName").value = sl ? sl.name : "";
-  document.getElementById("slDate").value = sl && sl.gig_date ? sl.gig_date : "";
+  // New setlists default to today's date (local); existing ones keep theirs.
+  const todayLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  document.getElementById("slDate").value = sl ? (sl.gig_date || "") : todayLocal;
   document.getElementById("slVenue").value = sl && sl.venue ? sl.venue : "";
   document.getElementById("slNotes").value = sl && sl.notes ? sl.notes : "";
 
