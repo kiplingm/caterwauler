@@ -98,6 +98,7 @@
     color:var(--gold);
     text-shadow:0 0 18px rgba(232,183,78,0.35);
   }
+  .marquee h1 .wordmark{display:block; height:50px; width:auto; mix-blend-mode:screen;}
   .marquee-top{display:flex; align-items:center; justify-content:space-between; gap:10px;}
   .marquee-actions{display:flex; gap:8px; flex:none;}
   .gear-btn{
