@@ -76,7 +76,7 @@
 
   button{cursor:pointer; transition:transform 0.1s ease, opacity 0.1s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;}
   button:active{transform:scale(0.96);}
-  .status-pill, .chip, .status-Solid, .status-Learning, .status-Maybe, .status-Retired, .status-Suggested{
+  .status-pill, .chip, .status-Solid, .status-Learning, .status-Maybe, .status-Park, .status-Suggested{
     transition:background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
   }
   @media (prefers-reduced-motion: reduce){
@@ -162,8 +162,9 @@
     max-width:112px;
   }
   .sort-select:focus{outline:none; border-color:var(--teal);}
+  .chips-row{display:flex; align-items:center; gap:8px;}
   .filter-chips{
-    display:flex; gap:6px; overflow-x:auto; padding-bottom:2px;
+    flex:1; min-width:0; display:flex; gap:6px; overflow-x:auto; padding-bottom:2px;
     -webkit-mask-image:linear-gradient(to right, black calc(100% - 28px), transparent);
     mask-image:linear-gradient(to right, black calc(100% - 28px), transparent);
   }
@@ -185,15 +186,15 @@
   .chip-learning{color:var(--teal); border-color:rgba(61,218,215,0.4);}
   .chip-maybe{color:var(--gold); border-color:rgba(232,183,78,0.4);}
   .chip-suggested{color:var(--cream-dim); border-color:var(--line);}
-  .chip-retired{color:var(--red); border-color:rgba(232,97,90,0.4);}
+  .chip-park{color:var(--red); border-color:rgba(232,97,90,0.4);}
   .chip-solid.active{border-color:var(--green); background:rgba(111,191,115,0.1);}
   .chip-learning.active{border-color:var(--teal); background:rgba(61,218,215,0.1);}
   .chip-suggested.active{border-color:var(--cream-dim); background:rgba(182,169,154,0.14);}
-  .chip-retired.active{border-color:var(--red); background:rgba(232,97,90,0.1);}
+  .chip-park.active{border-color:var(--red); background:rgba(232,97,90,0.1);}
   /* A brighter tint of .karafun-badge's brand pink (#D5167A) below — used
      as-is it's too dark/muted against this background to read at chip
      text size, unlike the light/pastel tones the other chip colors use. */
-  .kf-switch{display:inline-flex; align-items:center; gap:6px; margin-left:auto; cursor:pointer; color:#ff4fa8; font-size:12px;}
+  .kf-switch{display:inline-flex; align-items:center; gap:6px; flex:none; cursor:pointer; color:#ff4fa8; font-size:12px;}
   .kf-switch input{position:absolute; opacity:0; pointer-events:none;}
   .kf-track{width:28px; height:16px; border-radius:8px; background:var(--line); position:relative; transition:background .15s;}
   .kf-thumb{position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:var(--cream-dim); transition:transform .15s, background .15s;}
@@ -269,7 +270,7 @@
   .status-Solid{background:rgba(111,191,115,0.15); color:var(--green);}
   .status-Learning{background:rgba(61,218,215,0.15); color:var(--teal);}
   .status-Maybe{background:rgba(232,183,78,0.15); color:var(--gold);}
-  .status-Retired{background:rgba(232,97,90,0.15); color:var(--red);}
+  .status-Park{background:rgba(232,97,90,0.15); color:var(--red);}
   .status-Suggested{background:rgba(182,169,154,0.18); color:var(--cream-dim);}
   .status-pill{cursor:pointer;}
   .status-edit-select{

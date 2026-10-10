@@ -2,8 +2,8 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "81";
-const BUILD_DATE = "2026-10-10T06:47:48-07:00";
+const BUILD_VERSION = "82";
+const BUILD_DATE = "2026-10-10T06:50:14-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
 if(buildInfoEl){
@@ -129,8 +129,8 @@ let editingStatusId = null;
 // populateStatusSelect. Recommendations now write "Maybe" instead (see
 // addRecommendation) and every existing Test row was migrated to Maybe, so
 // the whole distinction is gone rather than left as unreachable dead code.
-const STATUS_OPTIONS = ["Solid","Learning","Maybe","Suggested","Retired"];
-const STATUS_ICONS = {Solid:"✓", Learning:"◐", Maybe:"?", Suggested:"★", Retired:"✕"};
+const STATUS_OPTIONS = ["Solid","Learning","Maybe","Suggested","Park"];
+const STATUS_ICONS = {Solid:"✓", Learning:"◐", Maybe:"?", Suggested:"★", Park:"✕"};
 
 function populateStatusSelect(selectEl, currentStatus){
   selectEl.innerHTML = STATUS_OPTIONS.map(opt => `<option value="${opt}">${opt}</option>`).join("");
@@ -191,7 +191,8 @@ karafunSwitch.querySelector("input").onchange = e => {
   karafunOnly = e.target.checked;
   render();
 };
-chipsEl.appendChild(karafunSwitch);
+// Outside the scrolling chip strip so it is always on-screen on phones.
+chipsEl.parentElement.appendChild(karafunSwitch);
 
 document.getElementById("search").addEventListener("input", e=>{
   searchTerm = e.target.value.toLowerCase();
@@ -1637,11 +1638,11 @@ async function buildSeedArtists(solidSongs){
   });
 
   // Genre neighbors: other artists already in the songbook (any status
-  // but Retired) sharing a genre tag with a Solid song.
+  // but Park) sharing a genre tag with a Solid song.
   const solidGenres = new Set(solidSongs.map(s => (s.genre||"").trim().toLowerCase()).filter(Boolean));
   if(solidGenres.size > 0){
     songs.forEach(s=>{
-      if(s.status === "Retired") return;
+      if(s.status === "Park") return;
       const genre = (s.genre||"").trim();
       const artist = (s.artist||"").trim();
       const genreLower = genre.toLowerCase();
@@ -3303,7 +3304,7 @@ const TUTORIAL_SLIDES = [
   {
     emoji: "📋",
     title: "Add songs, mark your status",
-    body: "Add songs from the Songbook tab. Every song gets a status — Solid, Learning, Maybe, Suggested, or Retired. Solid is the one that matters most: it drives everything else."
+    body: "Add songs from the Songbook tab. Every song gets a status — Solid, Learning, Maybe, Suggested, or Park. Solid is the one that matters most: it drives everything else."
   },
   {
     emoji: "📏",
