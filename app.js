@@ -2,8 +2,8 @@
 // static files served by GitHub Pages, so this is a simple manual marker
 // to confirm which version is actually live (useful given Pages/browser
 // caching can lag behind a push by a minute or two).
-const BUILD_VERSION = "82";
-const BUILD_DATE = "2026-10-10T06:50:14-07:00";
+const BUILD_VERSION = "83";
+const BUILD_DATE = "2026-10-10T06:54:05-07:00";
 
 const buildInfoEl = document.getElementById("buildInfo");
 if(buildInfoEl){
@@ -191,8 +191,8 @@ karafunSwitch.querySelector("input").onchange = e => {
   karafunOnly = e.target.checked;
   render();
 };
-// Outside the scrolling chip strip so it is always on-screen on phones.
-chipsEl.parentElement.appendChild(karafunSwitch);
+// Lives in the count row (spare room) so the chip strip keeps the full width.
+countText.after(karafunSwitch);
 
 document.getElementById("search").addEventListener("input", e=>{
   searchTerm = e.target.value.toLowerCase();
